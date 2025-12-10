@@ -11,7 +11,7 @@ Este módulo contiene la lógica de negocio para:
 from datetime import datetime, date, time, timedelta
 from typing import List, Optional, Dict, Any
 from sqlalchemy import and_, or_
-from app.database import db
+from app.database.session import DatabaseSession
 from app.models import Turno, Paciente, Estado, CambioEstado
 
 
@@ -77,8 +77,9 @@ class TurnoService:
                 fecha_creacion=datetime.now()
             )
             
-            db.session.add(turno)
-            db.session.flush()  # Para obtener el ID del turno
+            session = DatabaseSession.get_instance().session
+            session.add(turno)
+            session.flush()  # Para obtener el ID del turno
             
             # Registrar cambio de estado inicial
             cambio_estado = CambioEstado(
@@ -89,8 +90,8 @@ class TurnoService:
                 motivo='Turno creado'
             )
             
-            db.session.add(cambio_estado)
-            db.session.commit()
+            session.add(cambio_estado)
+            session.commit()
             
             return {
                 'success': True,
@@ -99,7 +100,7 @@ class TurnoService:
             }
             
         except Exception as e:
-            db.session.rollback()
+            session.rollback()
             return {
                 'success': False,
                 'error': f'Error al crear turno: {str(e)}',
@@ -249,8 +250,9 @@ class TurnoService:
                 motivo=motivo or f'Cambio a {nuevo_estado_nombre}'
             )
             
-            db.session.add(cambio_estado)
-            db.session.commit()
+            session = DatabaseSession.get_instance().session
+            session.add(cambio_estado)
+            session.commit()
             
             return {
                 'success': True,
@@ -259,7 +261,7 @@ class TurnoService:
             }
             
         except Exception as e:
-            db.session.rollback()
+            session.rollback()
             return {
                 'success': False,
                 'error': f'Error al cambiar estado: {str(e)}'

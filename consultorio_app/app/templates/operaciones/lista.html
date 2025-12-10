@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Operaciones{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Operaciones</h3>
+    <a href="{{ url_for('main.nueva_operacion') }}" class="btn btn-sm btn-success">
+        <i class="bi bi-clipboard-plus"></i> Nueva operación
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if operaciones %}
+        <div class="table-responsive">
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Paciente</th>
+                        <th>Descripción</th>
+                        <th>Monto</th>
+                        <th>Código</th>
+                        <th>Observaciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for operacion in operaciones %}
+                    <tr>
+                        <td>{{ operacion.fecha.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td>{{ operacion.paciente.apellido }}, {{ operacion.paciente.nombre }}</td>
+                        <td>{{ operacion.descripcion }}</td>
+                        <td>${{ '%.2f'|format(operacion.monto) }}</td>
+                        <td>{{ operacion.codigo.numero if operacion.codigo else '-' }}</td>
+                        <td>{{ operacion.observaciones or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">No hay operaciones registradas.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

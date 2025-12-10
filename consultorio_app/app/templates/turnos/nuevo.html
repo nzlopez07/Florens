@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Nuevo Turno{% endblock %}
+
+{% block content %}
+<h3 class="mb-3">Nuevo Turno</h3>
+<div class="card">
+    <div class="card-body">
+        <form method="post">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Paciente</label>
+                    <select name="paciente_id" class="form-select" required>
+                        <option value="" disabled selected>Seleccione...</option>
+                        {% for paciente in pacientes %}
+                        <option value="{{ paciente.id }}">{{ paciente.apellido }}, {{ paciente.nombre }} (DNI: {{ paciente.dni }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Fecha</label>
+                    <input type="date" name="fecha" class="form-control" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Hora</label>
+                    <input type="time" name="hora" class="form-control" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Estado</label>
+                    <select name="estado" class="form-select">
+                        <option value="Pendiente" selected>Pendiente</option>
+                        {% for estado in estados %}
+                        <option value="{{ estado.nombre }}">{{ estado.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Detalle</label>
+                    <textarea name="detalle" class="form-control" rows="3" placeholder="Motivo o notas"></textarea>
+                </div>
+            </div>
+            <div class="d-flex justify-content-end gap-2 mt-3">
+                <a href="{{ url_for('main.listar_turnos') }}" class="btn btn-outline-secondary">Cancelar</a>
+                <button type="submit" class="btn btn-primary">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

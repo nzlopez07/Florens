@@ -48,9 +48,9 @@
                     <th>Nombre</th>
                     <th>Apellido</th>
                     <th>Teléfono</th>
-                    <th>Email</th>
                     <th>Obra Social</th>
                     <th>Localidad</th>
+                    <th>Barrio</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
@@ -61,9 +61,9 @@
                     <td>{{ paciente.nombre }}</td>
                     <td>{{ paciente.apellido }}</td>
                     <td>{{ paciente.telefono or '-' }}</td>
-                    <td>{{ paciente.email or '-' }}</td>
                     <td>{{ paciente.obra_social.nombre if paciente.obra_social else '-' }}</td>
                     <td>{{ paciente.localidad.nombre if paciente.localidad else '-' }}</td>
+                    <td>{{ paciente.barrio or '-' }}</td>
                     <td>
                         <div class="btn-group btn-group-sm" role="group">
                             <a href="{{ url_for('main.ver_paciente', id=paciente.id) }}" 

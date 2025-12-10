@@ -21,59 +21,50 @@
                 <form method="POST">
                     <div class="row">
                         <!-- DNI -->
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label for="dni" class="form-label">DNI *</label>
                             <input type="text" class="form-control" id="dni" name="dni" 
                                    value="{{ paciente.dni if paciente else '' }}" required>
                         </div>
-                        
+
                         <!-- Nombre -->
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label for="nombre" class="form-label">Nombre *</label>
                             <input type="text" class="form-control" id="nombre" name="nombre" 
                                    value="{{ paciente.nombre if paciente else '' }}" required>
                         </div>
-                    </div>
-                    
-                    <div class="row">
+
                         <!-- Apellido -->
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label for="apellido" class="form-label">Apellido *</label>
                             <input type="text" class="form-control" id="apellido" name="apellido" 
                                    value="{{ paciente.apellido if paciente else '' }}" required>
                         </div>
-                        
-                        <!-- Fecha de Nacimiento -->
-                        <div class="col-md-6 mb-3">
-                            <label for="fecha_nacimiento" class="form-label">Fecha de Nacimiento</label>
-                            <input type="date" class="form-control" id="fecha_nacimiento" name="fecha_nacimiento" 
-                                   value="{{ paciente.fecha_nacimiento.strftime('%Y-%m-%d') if paciente and paciente.fecha_nacimiento else '' }}">
-                        </div>
                     </div>
-                    
+
                     <div class="row">
+                        <!-- Fecha de Nacimiento -->
+                        <div class="col-md-4 mb-3">
+                            <label for="fecha_nac" class="form-label">Fecha de Nacimiento</label>
+                            <input type="date" class="form-control" id="fecha_nac" name="fecha_nac" 
+                                   value="{{ paciente.fecha_nac.strftime('%Y-%m-%d') if paciente and paciente.fecha_nac else '' }}">
+                        </div>
+
                         <!-- Teléfono -->
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label for="telefono" class="form-label">Teléfono</label>
                             <input type="tel" class="form-control" id="telefono" name="telefono" 
                                    value="{{ paciente.telefono if paciente else '' }}">
                         </div>
-                        
-                        <!-- Email -->
-                        <div class="col-md-6 mb-3">
-                            <label for="email" class="form-label">Email</label>
-                            <input type="email" class="form-control" id="email" name="email" 
-                                   value="{{ paciente.email if paciente else '' }}">
+
+                        <!-- Dirección -->
+                        <div class="col-md-4 mb-3">
+                            <label for="direccion" class="form-label">Dirección</label>
+                            <input type="text" class="form-control" id="direccion" name="direccion" 
+                                   value="{{ paciente.direccion if paciente else '' }}">
                         </div>
                     </div>
-                    
-                    <!-- Dirección -->
-                    <div class="mb-3">
-                        <label for="direccion" class="form-label">Dirección</label>
-                        <input type="text" class="form-control" id="direccion" name="direccion" 
-                               value="{{ paciente.direccion if paciente else '' }}">
-                    </div>
-                    
+
                     <div class="row">
                         <!-- Obra Social -->
                         <div class="col-md-6 mb-3">
@@ -88,7 +79,7 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        
+
                         <!-- Localidad -->
                         <div class="col-md-6 mb-3">
                             <label for="localidad_id" class="form-label">Localidad</label>
@@ -103,13 +94,38 @@
                             </select>
                         </div>
                     </div>
-                    
-                    <!-- Observaciones -->
-                    <div class="mb-3">
-                        <label for="observaciones" class="form-label">Observaciones</label>
-                        <textarea class="form-control" id="observaciones" name="observaciones" rows="3">{{ paciente.observaciones if paciente else '' }}</textarea>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="carnet" class="form-label">Carnet</label>
+                            <input type="text" class="form-control" id="carnet" name="carnet" 
+                                   value="{{ paciente.carnet if paciente else '' }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="titular" class="form-label">Titular</label>
+                            <input type="text" class="form-control" id="titular" name="titular" 
+                                   value="{{ paciente.titular if paciente else '' }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="parentesco" class="form-label">Parentesco</label>
+                            <input type="text" class="form-control" id="parentesco" name="parentesco" 
+                                   value="{{ paciente.parentesco if paciente else '' }}">
+                        </div>
                     </div>
-                    
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="barrio" class="form-label">Barrio</label>
+                            <input type="text" class="form-control" id="barrio" name="barrio" 
+                                   value="{{ paciente.barrio if paciente else '' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="lugar_trabajo" class="form-label">Lugar de trabajo</label>
+                            <input type="text" class="form-control" id="lugar_trabajo" name="lugar_trabajo" 
+                                   value="{{ paciente.lugar_trabajo if paciente else '' }}">
+                        </div>
+                    </div>
+
                     <!-- Botones -->
                     <div class="d-flex justify-content-between">
                         <a href="{{ url_for('main.listar_pacientes') }}" class="btn btn-secondary">

@@ -101,8 +101,9 @@
                                 <strong>{{ turno.paciente.nombre }} {{ turno.paciente.apellido }}</strong><br>
                                 <small class="text-muted">{{ turno.fecha.strftime('%d/%m/%Y') }} - {{ turno.hora.strftime('%H:%M') }}</small>
                             </div>
-                            <span class="badge bg-{{ 'success' if turno.estado.nombre == 'Confirmado' else 'warning' }} rounded-pill">
-                                {{ turno.estado.nombre }}
+                            {% set estado_nombre = turno.estado or 'Pendiente' %}
+                            <span class="badge bg-{{ 'success' if estado_nombre == 'Confirmado' else 'warning' if estado_nombre == 'Pendiente' else 'secondary' }} rounded-pill">
+                                {{ estado_nombre }}
                             </span>
                         </li>
                         {% endfor %}

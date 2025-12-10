@@ -30,8 +30,8 @@
                             <tr>
                                 <td><strong>Fecha de Nacimiento:</strong></td>
                                 <td>
-                                    {% if paciente.fecha_nacimiento %}
-                                        {{ paciente.fecha_nacimiento.strftime('%d/%m/%Y') }}
+                                    {% if paciente.fecha_nac %}
+                                        {{ paciente.fecha_nac.strftime('%d/%m/%Y') }}
                                         <small class="text-muted">
                                             ({{ edad }} años)
                                         </small>
@@ -45,8 +45,16 @@
                                 <td>{{ paciente.telefono or 'No registrado' }}</td>
                             </tr>
                             <tr>
-                                <td><strong>Email:</strong></td>
-                                <td>{{ paciente.email or 'No registrado' }}</td>
+                                <td><strong>Carnet:</strong></td>
+                                <td>{{ paciente.carnet or 'No registrado' }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Titular:</strong></td>
+                                <td>{{ paciente.titular or 'No registrado' }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Parentesco:</strong></td>
+                                <td>{{ paciente.parentesco or 'No registrado' }}</td>
                             </tr>
                         </table>
                     </div>
@@ -59,6 +67,10 @@
                                 <td>{{ paciente.direccion or 'No registrada' }}</td>
                             </tr>
                             <tr>
+                                <td><strong>Barrio:</strong></td>
+                                <td>{{ paciente.barrio or 'No registrado' }}</td>
+                            </tr>
+                            <tr>
                                 <td><strong>Localidad:</strong></td>
                                 <td>{{ paciente.localidad.nombre if paciente.localidad else 'No registrada' }}</td>
                             </tr>
@@ -67,21 +79,12 @@
                                 <td>{{ paciente.obra_social.nombre if paciente.obra_social else 'No registrada' }}</td>
                             </tr>
                             <tr>
-                                <td><strong>Fecha de Registro:</strong></td>
-                                <td>{{ paciente.fecha_registro.strftime('%d/%m/%Y') if paciente.fecha_registro else 'No registrada' }}</td>
+                                <td><strong>Lugar de Trabajo:</strong></td>
+                                <td>{{ paciente.lugar_trabajo or 'No registrado' }}</td>
                             </tr>
                         </table>
                     </div>
                 </div>
-                
-                {% if paciente.observaciones %}
-                <div class="mt-3">
-                    <h6 class="text-muted">Observaciones</h6>
-                    <div class="alert alert-light">
-                        {{ paciente.observaciones }}
-                    </div>
-                </div>
-                {% endif %}
             </div>
         </div>
     </div>
@@ -141,8 +144,7 @@
                         <th>Fecha</th>
                         <th>Hora</th>
                         <th>Estado</th>
-                        <th>Observaciones</th>
-                        <th>Acciones</th>
+                        <th>Detalle</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -150,24 +152,8 @@
                     <tr>
                         <td>{{ turno.fecha.strftime('%d/%m/%Y') }}</td>
                         <td>{{ turno.hora.strftime('%H:%M') }}</td>
-                        <td>
-                            <span class="badge bg-{{ 'success' if turno.estado.nombre == 'Completado' else 'warning' if turno.estado.nombre == 'Confirmado' else 'secondary' }}">
-                                {{ turno.estado.nombre }}
-                            </span>
-                        </td>
-                        <td>{{ turno.observaciones or '-' }}</td>
-                        <td>
-                            <div class="btn-group btn-group-sm">
-                                <a href="{{ url_for('main.ver_turno', id=turno.id) }}" class="btn btn-outline-info btn-sm">
-                                    <i class="bi bi-eye"></i>
-                                </a>
-                                {% if turno.estado.nombre in ['Pendiente', 'Confirmado'] %}
-                                <a href="{{ url_for('main.editar_turno', id=turno.id) }}" class="btn btn-outline-warning btn-sm">
-                                    <i class="bi bi-pencil"></i>
-                                </a>
-                                {% endif %}
-                            </div>
-                        </td>
+                        <td>{{ turno.estado or 'Sin estado' }}</td>
+                        <td>{{ turno.detalle or '-' }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -199,9 +185,8 @@
                         <th>Fecha</th>
                         <th>Código</th>
                         <th>Descripción</th>
-                        <th>Diente</th>
-                        <th>Costo</th>
-                        <th>Estado</th>
+                        <th>Monto</th>
+                        <th>Observaciones</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -210,13 +195,8 @@
                         <td>{{ operacion.fecha.strftime('%d/%m/%Y') }}</td>
                         <td>{{ operacion.codigo.codigo if operacion.codigo else '-' }}</td>
                         <td>{{ operacion.descripcion }}</td>
-                        <td>{{ operacion.diente or '-' }}</td>
-                        <td>${{ "%.2f"|format(operacion.costo) if operacion.costo else '-' }}</td>
-                        <td>
-                            <span class="badge bg-{{ 'success' if operacion.estado.nombre == 'Completado' else 'warning' if operacion.estado.nombre == 'En Progreso' else 'secondary' }}">
-                                {{ operacion.estado.nombre }}
-                            </span>
-                        </td>
+                        <td>${{ "%.2f"|format(operacion.monto) }}</td>
+                        <td>{{ operacion.observaciones or '-' }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

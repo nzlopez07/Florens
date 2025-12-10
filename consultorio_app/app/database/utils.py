@@ -2,6 +2,7 @@ import os
 import shutil
 from datetime import datetime
 from app.database import db
+from app.database.session import DatabaseSession
 from flask import current_app
 
 def init_database():
@@ -32,7 +33,7 @@ def get_session():
     """
     Obtiene la sesión actual de la base de datos
     """
-    return db.session
+    return DatabaseSession.get_instance().session
 
 def backup_database():
     """

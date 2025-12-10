@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Nueva Operación{% endblock %}
+
+{% block content %}
+<h3 class="mb-3">Nueva Operación</h3>
+<div class="card">
+    <div class="card-body">
+        <form method="post">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Paciente</label>
+                    <select name="paciente_id" class="form-select" required>
+                        <option value="" disabled selected>Seleccione...</option>
+                        {% for paciente in pacientes %}
+                        <option value="{{ paciente.id }}">{{ paciente.apellido }}, {{ paciente.nombre }} (DNI: {{ paciente.dni }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Código (opcional)</label>
+                    <select name="codigo_id" class="form-select">
+                        <option value="">Sin código</option>
+                        {% for codigo in codigos %}
+                        <option value="{{ codigo.id }}">{{ codigo.numero }} - {{ codigo.descripcion }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">Descripción</label>
+                    <input type="text" name="descripcion" class="form-control" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Monto</label>
+                    <input type="number" name="monto" step="0.01" min="0" class="form-control" required>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Observaciones</label>
+                    <textarea name="observaciones" class="form-control" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="d-flex justify-content-end gap-2 mt-3">
+                <a href="{{ url_for('main.listar_operaciones') }}" class="btn btn-outline-secondary">Cancelar</a>
+                <button type="submit" class="btn btn-primary">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
