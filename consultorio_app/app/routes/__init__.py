@@ -8,5 +8,6 @@ from . import index  # noqa: E402,F401
 from . import pacientes  # noqa: E402,F401
 from . import turnos  # noqa: E402,F401
 from . import operaciones  # noqa: E402,F401
+from . import api  # noqa: E402,F401
 
 __all__ = ['main_bp']

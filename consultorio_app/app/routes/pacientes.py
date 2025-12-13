@@ -9,7 +9,20 @@ from . import main_bp
 
 @main_bp.route('/pacientes')
 def listar_pacientes():
-    """Lista todos los pacientes con funcionalidad de búsqueda."""
+    """Lista todos los pacientes con funcionalidad de búsqueda.
+    
+    ---
+    tags:
+      - Pacientes
+    parameters:
+      - name: buscar
+        in: query
+        type: string
+        description: Término de búsqueda por nombre, apellido o DNI
+    responses:
+      200:
+        description: Lista de pacientes obtenida exitosamente
+    """
     termino_busqueda = request.args.get('buscar', '').strip()
     if termino_busqueda:
         pacientes = BusquedaUtils.buscar_pacientes_simple(termino_busqueda)
@@ -25,7 +38,61 @@ def listar_pacientes():
 
 @main_bp.route('/pacientes/nuevo', methods=['GET', 'POST'])
 def crear_paciente():
-    """Crear un nuevo paciente."""
+    """Crear un nuevo paciente.
+    
+    ---
+    tags:
+      - Pacientes
+    parameters:
+      - name: nombre
+        in: form
+        type: string
+        required: true
+      - name: apellido
+        in: form
+        type: string
+        required: true
+      - name: dni
+        in: form
+        type: string
+        required: true
+      - name: fecha_nac
+        in: form
+        type: string
+        format: date
+      - name: telefono
+        in: form
+        type: string
+      - name: direccion
+        in: form
+        type: string
+      - name: obra_social_id
+        in: form
+        type: integer
+      - name: localidad_id
+        in: form
+        type: integer
+      - name: carnet
+        in: form
+        type: string
+      - name: titular
+        in: form
+        type: string
+      - name: parentesco
+        in: form
+        type: string
+      - name: lugar_trabajo
+        in: form
+        type: string
+      - name: barrio
+        in: form
+        type: string
+    responses:
+      200:
+        description: Formulario para crear paciente (GET) o paciente creado (POST)
+      302:
+        description: Redirección después de crear paciente exitosamente
+    """
     session = DatabaseSession.get_instance().session
 
     if request.method == 'POST':
@@ -68,7 +135,23 @@ def crear_paciente():
 
 @main_bp.route('/pacientes/<int:id>')
 def ver_paciente(id: int):
-    """Ver detalles de un paciente."""
+    """Ver detalles de un paciente.
+    
+    ---
+    tags:
+      - Pacientes
+    parameters:
+      - name: id
+        in: path
+        type: integer
+        required: true
+        description: ID del paciente
+    responses:
+      200:
+        description: Detalles del paciente obtenidos exitosamente
+      404:
+        description: Paciente no encontrado
+    """
     paciente = Paciente.query.get_or_404(id)
 
     edad = None

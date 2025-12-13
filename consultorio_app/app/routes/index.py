@@ -6,7 +6,15 @@ from . import main_bp
 
 @main_bp.route('/')
 def index():
-    """Página principal con estadísticas y próximos turnos."""
+    """Página principal con estadísticas y próximos turnos.
+    
+    ---
+    tags:
+      - Inicio
+    responses:
+      200:
+        description: Dashboard con estadísticas del sistema
+    """
     stats = {
         'pacientes': Paciente.query.count(),
         'turnos': Turno.query.count(),

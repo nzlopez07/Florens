@@ -1,5 +1,4 @@
 from sqlalchemy import Column, Integer, String
-from sqlalchemy.orm import relationship
 from app.database import db
 
 class Estado(db.Model):
@@ -7,5 +6,3 @@ class Estado(db.Model):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     nombre = Column(String(50), nullable=False, unique=True)
-
-    cambios_estado = relationship("CambioEstado", back_populates="estado")

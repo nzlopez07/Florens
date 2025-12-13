@@ -12,33 +12,9 @@ class Turno(db.Model):
     hora = Column(Time, nullable=False)
     detalle = Column(String, nullable=True)
     estado = Column(String, nullable=True)
-    cambios_estado = relationship("CambioEstado", back_populates="turno")
+    cambios_estado = relationship("CambioEstado", back_populates="turno", cascade="all, delete-orphan")
     operacion_id = Column(Integer, ForeignKey("operaciones.id"), nullable=True)
     operacion = relationship("Operacion", back_populates="turnos")
 
-    def registrar_cambio_estado(self, nuevo_estado, usuario=None):
-        # Import local para evitar import circular
-        from app.models.cambioEstado import CambioEstado
-        
-        # Cierra el anterior si lo hay
-        for cambio in self.cambios_estado:
-            if cambio.es_estado_actual():
-                cambio.cerrar()
-        # Agrega nuevo
-        nuevo = CambioEstado(
-            id=len(self.cambios_estado) + 1,
-            turno_id=self.id,
-            estado=nuevo_estado,
-            usuario=usuario
-        )
-        self.cambios_estado.append(nuevo)
-        self.estado = nuevo_estado
-
-    def estado_actual(self):
-        for cambio in reversed(self.cambios_estado):
-            if cambio.es_estado_actual():
-                return cambio.estado
-        return None
-
     def __str__(self):
-        return f"Turno {self.id} - {self.fecha} {self.hora} - {self.estado_actual()}"
+        return f"Turno {self.id} - {self.fecha} {self.hora} - {self.estado or 'Pendiente'}"

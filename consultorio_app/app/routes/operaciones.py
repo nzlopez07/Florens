@@ -7,14 +7,56 @@ from . import main_bp
 
 @main_bp.route('/operaciones')
 def listar_operaciones():
-    """Lista todas las operaciones."""
+    """Lista todas las operaciones.
+    
+    ---
+    tags:
+      - Operaciones
+    responses:
+      200:
+        description: Lista de operaciones obtenida exitosamente
+    """
     operaciones = Operacion.query.order_by(Operacion.fecha.desc()).all()
     return render_template('operaciones/lista.html', operaciones=operaciones)
 
 
 @main_bp.route('/operaciones/nueva', methods=['GET', 'POST'])
 def nueva_operacion():
-    """Crear una nueva operación."""
+    """Crear una nueva operación.
+    
+    ---
+    tags:
+      - Operaciones
+    parameters:
+      - name: paciente_id
+        in: form
+        type: integer
+        required: true
+        description: ID del paciente
+      - name: descripcion
+        in: form
+        type: string
+        required: true
+        description: Descripción de la operación
+      - name: monto
+        in: form
+        type: number
+        required: true
+        description: Monto de la operación
+      - name: codigo_id
+        in: form
+        type: integer
+        description: ID del código de operación
+      - name: observaciones
+        in: form
+        type: string
+        description: Observaciones adicionales
+    responses:
+      200:
+        description: Formulario para crear operación (GET) o operación creada (POST)
+      302:
+        description: Redirección después de crear operación exitosamente
+    """
     session = DatabaseSession.get_instance().session
     if request.method == 'POST':
         try:

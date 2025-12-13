@@ -1,5 +1,38 @@
 # Sistema de Gestión de Consultorio Odontológico
 
+## 📚 Documentación del Proyecto
+
+**Documentación completa disponible en `/docs`:**
+
+| Documento | Descripción | Estado |
+|-----------|-------------|--------|
+| [📋 Roadmap](docs/roadmap.md) | Plan de desarrollo en 8 fases | En progreso |
+| [📐 Decisiones Técnicas](docs/decisiones_tecnicas.md) | Arquitectura y decisiones clave | ✅ Completo |
+| [🔐 Seguridad](docs/seguridad.md) | Políticas de seguridad y privacidad | ✅ Completo |
+| [📖 Documentación Completa](docs/DOCUMENTACION_COMPLETA.md) | Guía exhaustiva del sistema | ✅ Completo |
+| [🎨 Análisis Frontend](docs/ANALISIS_MIGRACION_FRONTEND.md) | Evaluación de migración a frameworks modernos | ✅ Completo |
+
+---
+
+## 🚀 Quick Start
+
+```bash
+# 1. Activar entorno virtual
+.venv\Scripts\activate
+
+# 2. Instalar dependencias (si no están)
+pip install -r requirements.txt
+
+# 3. Ejecutar servidor
+python run.py
+
+# 4. Acceder a la aplicación
+# - Web: http://127.0.0.1:5000
+# - API Docs: http://127.0.0.1:5000/api/docs
+```
+
+---
+
 ## 📁 Estructura del Proyecto
 
 ```
