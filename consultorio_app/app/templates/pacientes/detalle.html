@@ -121,6 +121,14 @@
                     <a href="{{ url_for('main.nueva_prestacion') }}?paciente_id={{ paciente.id }}" class="btn btn-outline-info btn-sm">
                         <i class="bi bi-clipboard-plus"></i> Nueva Prestación
                     </a>
+                    <a href="{{ url_for('main.ver_odontograma_paciente', id=paciente.id) }}" class="btn btn-outline-primary btn-sm position-relative">
+                        <i class="bi bi-diagram-3"></i> Ver Odontograma
+                        {% if desactualizado_odonto %}
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" title="Odontograma desactualizado: hay prestaciones nuevas que no están registradas">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                        </span>
+                        {% endif %}
+                    </a>
                     <a href="{{ url_for('main.editar_paciente', id=paciente.id) }}" class="btn btn-outline-warning btn-sm">
                         <i class="bi bi-pencil"></i> Editar Datos
                     </a>
@@ -154,6 +162,7 @@
                         <th>Hora</th>
                         <th>Estado</th>
                         <th>Detalle</th>
+                        <th class="text-center">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -163,6 +172,11 @@
                         <td>{{ turno.hora.strftime('%H:%M') }}</td>
                         <td>{{ turno.estado or 'Sin estado' }}</td>
                         <td>{{ turno.detalle or '-' }}</td>
+                        <td class="text-center">
+                            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('main.ver_turno', turno_id=turno.id) }}">
+                                <i class="bi bi-box-arrow-up-right"></i> Ver
+                            </a>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -210,8 +224,15 @@
                 <tbody>
                     {% for prestacion in prestaciones %}
                     {% if prestacion %}
-                    <tr>
-                        <td>{{ prestacion.fecha.strftime('%d/%m/%Y') if prestacion.fecha else '-' }}</td>
+                    <tr {% if prestacion.id in prestaciones_nuevas %}class="table-warning"{% endif %}>
+                        <td>
+                            {{ prestacion.fecha.strftime('%d/%m/%Y') if prestacion.fecha else '-' }}
+                            {% if prestacion.id in prestaciones_nuevas %}
+                            <span title="Esta prestación no está registrada en el odontograma actual" class="badge bg-danger ms-2">
+                                <i class="bi bi-exclamation-triangle-fill"></i>
+                            </span>
+                            {% endif %}
+                        </td>
                         <td>{{ prestacion.get_codigo() or '-' }}</td>
                         <td>{{ prestacion.descripcion }}</td>
                         <td>${{ "%.2f"|format(prestacion.monto) }}</td>

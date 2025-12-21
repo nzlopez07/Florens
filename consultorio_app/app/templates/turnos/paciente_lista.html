@@ -29,6 +29,7 @@
                         <th>Hora</th>
                         <th>Estado</th>
                         <th>Detalle</th>
+                        <th class="text-center">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -38,6 +39,11 @@
                         <td>{{ turno.hora.strftime('%H:%M') }}</td>
                         <td>{{ turno.estado or 'Sin estado' }}</td>
                         <td>{{ turno.detalle or '-' }}</td>
+                        <td class="text-center">
+                            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('main.ver_turno', turno_id=turno.id) }}">
+                                <i class="bi bi-box-arrow-up-right"></i> Ver
+                            </a>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

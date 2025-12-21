@@ -23,6 +23,7 @@ class Paciente(db.Model):
     barrio = Column(String, nullable=True)
     turnos = relationship("Turno", back_populates="paciente", cascade="all, delete-orphan")
     prestaciones = relationship("Prestacion", back_populates="paciente")
+    odontogramas = relationship("Odontograma", back_populates="paciente", cascade="all, delete-orphan")
 
     def __str__(self):
         return f"{self.apellido}, {self.nombre} (DNI: {self.dni})"

@@ -211,6 +211,53 @@ def run_migrations_sqlite():
                 print(f"[ERROR] No se pudo agregar duracion: {e}")
                 db.session.rollback()
 
+    # 8) Crear tabla odontogramas si no existe
+    if 'odontogramas' not in table_names:
+        print("[TOOLS] Creando tabla odontogramas...")
+        db.session.execute(text(
+            """
+            CREATE TABLE odontogramas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                paciente_id INTEGER NOT NULL,
+                version_seq INTEGER NOT NULL DEFAULT 1,
+                es_actual BOOLEAN NOT NULL DEFAULT 1,
+                nota_general TEXT,
+                ultima_prestacion_registrada_en DATETIME,
+                creado_en DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                actualizado_en DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                UNIQUE(paciente_id, version_seq),
+                FOREIGN KEY(paciente_id) REFERENCES pacientes(id)
+            )
+            """
+        ))
+        db.session.commit()
+        print("[OK] Tabla odontogramas creada")
+
+    # 9) Crear tabla odontograma_caras si no existe
+    # Nota: usar PRAGMA table_info porque table_names se tomó al inicio
+    odontograma_caras_exists = db.session.execute(text(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='odontograma_caras'"
+    )).fetchone()
+    if not odontograma_caras_exists:
+        print("[TOOLS] Creando tabla odontograma_caras...")
+        db.session.execute(text(
+            """
+            CREATE TABLE odontograma_caras (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                odontograma_id INTEGER NOT NULL,
+                diente TEXT NOT NULL,
+                cara TEXT NOT NULL,
+                marca_codigo TEXT,
+                marca_texto TEXT,
+                comentario TEXT,
+                UNIQUE(odontograma_id, diente, cara),
+                FOREIGN KEY(odontograma_id) REFERENCES odontogramas(id)
+            )
+            """
+        ))
+        db.session.commit()
+        print("[OK] Tabla odontograma_caras creada")
+
 
 def main():
     app = create_app()

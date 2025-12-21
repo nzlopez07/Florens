@@ -1,0 +1,679 @@
+{% extends "base.html" %}
+
+{% block title %}Odontograma - {{ odontograma.paciente.nombre }} {{ odontograma.paciente.apellido }}{% endblock %}
+
+{% block content %}
+<style>
+    .odontograma-canvas {
+        position: relative;
+        width: 100%;
+        max-width: 1100px;
+        margin: 0 auto;
+    }
+    .odontograma-canvas img {
+        width: 100%;
+        height: auto;
+        display: block;
+    }
+    .odontograma-overlay {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+    }
+    .odontograma-anomalias {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+    }
+    .slot-btn {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 1px solid rgba(13,110,253,0.6);
+        background: rgba(13, 110, 253, 0.08);
+        color: #0d6efd;
+        font-size: 8px;
+        line-height: 12px;
+        text-align: center;
+        cursor: pointer;
+        pointer-events: auto;
+    }
+    .slot-btn:hover {
+        background: rgba(13, 110, 253, 0.22);
+    }
+    .slot-btn.active {
+        background: #0d6efd;
+        color: #fff;
+    }
+    .legend-dot {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 6px;
+        background: rgba(13, 110, 253, 0.6);
+        border: 1px solid #0d6efd;
+    }
+    .slot-hidden .slot-btn {
+        opacity: 0.2;
+        border-style: dotted;
+    }
+    .anomalia-mark {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        font-size: 18px;
+        font-weight: 700;
+        pointer-events: none;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    }
+    .anomalia-exodoncia { color: #d6336c; }
+    .anomalia-alerta { color: #ffc107; }
+</style>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h4 class="mb-0"><i class="bi bi-diagram-3"></i> Odontograma</h4>
+        <small class="text-muted">Paciente: {{ odontograma.paciente.apellido }}, {{ odontograma.paciente.nombre }}</small><br>
+        <small class="text-muted">Versión: {{ odontograma.version_seq }}{% if odontograma.es_actual %} (Actual){% else %} (Histórica){% endif %}</small><br>
+        <small class="text-muted">Actualizado: {{ odontograma.actualizado_en.strftime('%d/%m/%Y %H:%M') }}</small>
+        {% if desactualizado %}
+        <div class="mt-2 alert alert-warning py-2 px-3 mb-0">
+            <i class="bi bi-exclamation-triangle"></i>
+            <strong>Odontograma desactualizado:</strong> Última prestación registrada el {{ ultima_prestacion.strftime('%d/%m/%Y %H:%M') }}. Por favor, crea una nueva versión para actualizar los cambios.
+        </div>
+        {% endif %}
+    </div>
+    <div class="btn-group btn-group-sm">
+        <a class="btn btn-outline-secondary" href="{{ url_for('main.ver_paciente', id=odontograma.paciente.id) }}">
+            <i class="bi bi-arrow-left"></i> Volver al paciente
+        </a>
+        <button class="btn btn-primary" id="btn-guardar-version">
+            <i class="bi bi-save"></i> Guardar como nueva versión
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-9">
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-image"></i> Odontograma interactivo</span>
+                <small class="text-muted">Hacé click en un slot del diente para pre-cargar el formulario</small>
+            </div>
+            <div class="card-body">
+                <div class="odontograma-canvas">
+                    <img src="{{ url_for('main.media_file', filename='ODONTOGRAMA 1.png') }}" alt="Odontograma" class="img-fluid rounded border">
+                    <div id="odontograma-overlay" class="odontograma-overlay"></div>
+                    <div id="anomalia-overlay" class="odontograma-anomalias"></div>
+                </div>
+                <div class="mt-2 small text-muted">
+                    <span class="legend-dot"></span> Slot clickeable (elige cara y diente automáticamente)
+                    <label class="ms-3 form-check-inline small"><input type="checkbox" id="toggle-discreto" class="form-check-input" checked> Modo discreto</label>
+                    <button type="button" class="btn btn-outline-secondary btn-sm ms-2" id="btn-calibrar">Calibrar</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm ms-2" id="btn-guardar-slots" disabled>Guardar slots</button>
+                    <small class="text-muted ms-2">Arrastrá los círculos "O" (oclusal) para ajustar</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-brush"></i> Editor rápido de caras</span>
+                <small class="text-muted">Agregá marcas y guardá una nueva versión</small>
+            </div>
+            <div class="card-body">
+                <form id="form-cara" class="row g-2">
+                    <div class="col-12 col-md-3">
+                        <label class="form-label mb-1">Diente (FDI)</label>
+                        <input type="text" class="form-control" id="input-diente" placeholder="Ej: 11" required>
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <label class="form-label mb-1">Cara</label>
+                        <select class="form-select" id="input-cara" required>
+                            <option value="">Seleccionar</option>
+                            <option value="vestibular">Vestibular/Buccal</option>
+                            <option value="lingual">Lingual/Palatina</option>
+                            <option value="oclusal">Oclusal/Incisal</option>
+                            <option value="mesial">Mesial</option>
+                            <option value="distal">Distal</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <label class="form-label mb-1">Marca (texto)</label>
+                        <input type="text" class="form-control" id="input-marca-texto" placeholder="Caries, obturación...">
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <label class="form-label mb-1">Código (opcional)</label>
+                        <input type="text" class="form-control" id="input-marca-codigo" placeholder="CAT/001">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label mb-1">Comentario</label>
+                        <input type="text" class="form-control" id="input-comentario" placeholder="Detalle breve">
+                    </div>
+                    <div class="col-12 d-flex gap-2">
+                        <button type="submit" class="btn btn-success btn-sm">
+                            <i class="bi bi-plus-circle"></i> Agregar / Actualizar en borrador
+                        </button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" id="btn-borrar-cara">
+                            <i class="bi bi-x-circle"></i> Marcar eliminación
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-limpiar-form">
+                            <i class="bi bi-eraser"></i> Limpiar campos
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-journal-text"></i> Nota general de la nueva versión</span>
+                <small class="text-muted">Opcional</small>
+            </div>
+            <div class="card-body">
+                <textarea id="input-nota-general" class="form-control" rows="2" placeholder="Ej: Se documentan nuevas caries en sector anterior.">{{ odontograma.nota_general or '' }}</textarea>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-list-task"></i> Cambios pendientes</span>
+                <small class="text-muted" id="contador-cambios">0 cambios</small>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0" id="tabla-cambios">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Diente</th><th>Cara</th><th>Marca</th><th>Código</th><th>Comentario</th><th>Acción</th><th></th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-eye"></i> Marcas de la versión {{ odontograma.version_seq }}</span>
+                <small class="text-muted">Se actualizarán al cargar otra versión</small>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0" id="tabla-cara-actual">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Diente</th><th>Cara</th><th>Marca</th><th>Código</th><th>Comentario</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-clock-history"></i> Versiones</h6>
+            </div>
+            <div class="list-group list-group-flush" style="max-height: 480px; overflow-y: auto;">
+                {% for v in versiones %}
+                <a class="list-group-item list-group-item-action {% if v.id == odontograma.id %}active{% endif %}"
+                   href="{{ url_for('main.ver_odontograma_paciente', id=odontograma.paciente.id, odontograma_id=v.id) }}">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <strong>v{{ v.version_seq }}</strong>
+                            {% if v.es_actual %}<span class="badge bg-success ms-2">Actual</span>{% endif %}
+                        </div>
+                        <small>{{ v.actualizado_en.strftime('%d/%m %H:%M') }}</small>
+                    </div>
+                    <div class="small{% if v.id == odontograma.id %} text-white{% else %} text-muted{% endif %}">{{ v.nota_general or 'Sin nota' }}</div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="alert alert-info mt-3" id="alerta-estado" style="display:none;"></div>
+
+<script>
+(() => {
+    const pacienteId = {{ odontograma.paciente.id }};
+    const baseOdontogramaId = {{ odontograma.id }};
+    const datosUrl = "{{ url_for('main.obtener_datos_odontograma', id=odontograma.paciente.id, odontograma_id=odontograma.id) }}";
+    const crearVersionUrl = "{{ url_for('main.crear_version_odontograma', id=odontograma.paciente.id) }}";
+    const verOdontogramaUrl = "{{ url_for('main.ver_odontograma_paciente', id=odontograma.paciente.id) }}";
+    const slotsUrl = "{{ url_for('main.media_file', filename='odontograma_slots.json') }}";
+    const slotsSaveUrl = "{{ url_for('main.guardar_slots_odontograma') }}";
+    const CALIB_OFFSET_Y = 0; // sin desplazamiento global; la calibración usa coordenadas reales
+    const MARK_OFFSET_Y = -0; // sube levemente la marca para centrarla con el slot
+    const tablaActualBody = document.querySelector('#tabla-cara-actual tbody');
+    const tablaCambiosBody = document.querySelector('#tabla-cambios tbody');
+    const contadorCambios = document.getElementById('contador-cambios');
+    const alertaEstado = document.getElementById('alerta-estado');
+
+    const overlay = document.getElementById('odontograma-overlay');
+    const anomOverlay = document.getElementById('anomalia-overlay');
+    const toggleDiscreto = document.getElementById('toggle-discreto');
+    const btnCalibrar = document.getElementById('btn-calibrar');
+    const btnGuardarSlots = document.getElementById('btn-guardar-slots');
+
+    const inputDiente = document.getElementById('input-diente');
+    const inputCara = document.getElementById('input-cara');
+    const inputMarcaTexto = document.getElementById('input-marca-texto');
+    const inputMarcaCodigo = document.getElementById('input-marca-codigo');
+    const inputComentario = document.getElementById('input-comentario');
+    const inputNota = document.getElementById('input-nota-general');
+
+    let estadoActual = null;
+    let cambiosPendientes = [];
+    let slotSeleccionado = null;
+    let baseTeeth = [];
+    let cfgTop = null;
+    let cfgBottom = null;
+    let calibrando = false;
+    let dragState = null;
+
+    const caraLabels = {
+        vestibular: 'Vestibular/Buccal',
+        lingual: 'Lingual/Palatina',
+        oclusal: 'Oclusal/Incisal',
+        mesial: 'Mesial',
+        distal: 'Distal',
+    };
+
+    function mostrarMensaje(texto, tipo = 'info') {
+        alertaEstado.textContent = texto;
+        alertaEstado.className = `alert alert-${tipo} mt-3`;
+        alertaEstado.style.display = 'block';
+    }
+
+    function limpiarMensaje() {
+        alertaEstado.style.display = 'none';
+    }
+
+    function renderTablaActual(caras) {
+        tablaActualBody.innerHTML = '';
+        if (!caras || !caras.length) {
+            tablaActualBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Sin marcas registradas</td></tr>';
+            return;
+        }
+        caras.forEach(c => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${c.diente}</td>
+                <td>${caraLabels[c.cara] || c.cara}</td>
+                <td>${c.marca_texto || '-'}</td>
+                <td>${c.marca_codigo || '-'}</td>
+                <td>${c.comentario || '-'}</td>
+            `;
+            tablaActualBody.appendChild(tr);
+        });
+        renderAnomalias(caras);
+    }
+
+    function renderTablaCambios() {
+        tablaCambiosBody.innerHTML = '';
+        if (!cambiosPendientes.length) {
+            tablaCambiosBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Sin cambios pendientes</td></tr>';
+            contadorCambios.textContent = '0 cambios';
+            return;
+        }
+
+        cambiosPendientes.forEach((cambio, idx) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${cambio.diente}</td>
+                <td>${caraLabels[cambio.cara] || cambio.cara}</td>
+                <td>${cambio.borrar ? '<span class="text-danger">(eliminar)</span>' : (cambio.marca_texto || '-')}</td>
+                <td>${cambio.borrar ? '-' : (cambio.marca_codigo || '-')}</td>
+                <td>${cambio.borrar ? '-' : (cambio.comentario || '-')}</td>
+                <td>${cambio.borrar ? 'Eliminar' : 'Actualizar/Agregar'}</td>
+                <td><button class="btn btn-outline-secondary btn-sm" data-idx="${idx}"><i class="bi bi-trash"></i></button></td>
+            `;
+            tablaCambiosBody.appendChild(tr);
+        });
+        contadorCambios.textContent = `${cambiosPendientes.length} cambio${cambiosPendientes.length === 1 ? '' : 's'}`;
+
+        tablaCambiosBody.querySelectorAll('button[data-idx]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.getAttribute('data-idx'), 10);
+                cambiosPendientes.splice(idx, 1);
+                renderTablaCambios();
+            });
+        });
+    }
+
+    function agregarCambio(borrar = false) {
+        const diente = inputDiente.value.trim();
+        const cara = inputCara.value.trim();
+        if (!diente || !cara) {
+            mostrarMensaje('Indicá diente y cara antes de agregar.', 'warning');
+            return;
+        }
+
+        const cambio = {
+            diente,
+            cara,
+            marca_texto: inputMarcaTexto.value.trim() || null,
+            marca_codigo: inputMarcaCodigo.value.trim() || null,
+            comentario: inputComentario.value.trim() || null,
+            borrar,
+        };
+
+        // reemplaza si ya hay un cambio para ese diente/cara
+        const existenteIdx = cambiosPendientes.findIndex(c => c.diente === diente && c.cara === cara);
+        if (existenteIdx >= 0) {
+            cambiosPendientes[existenteIdx] = cambio;
+        } else {
+            cambiosPendientes.push(cambio);
+        }
+        renderTablaCambios();
+        limpiarMensaje();
+    }
+
+    function limpiarForm() {
+        inputDiente.value = '';
+        inputCara.value = '';
+        inputMarcaTexto.value = '';
+        inputMarcaCodigo.value = '';
+        inputComentario.value = '';
+        if (slotSeleccionado) {
+            slotSeleccionado.classList.remove('active');
+            slotSeleccionado = null;
+        }
+    }
+
+    async function cargarDatosIniciales() {
+        try {
+            const res = await fetch(datosUrl);
+            if (!res.ok) throw new Error('No se pudieron cargar los datos');
+            const data = await res.json();
+            estadoActual = data;
+            renderTablaActual(data.odontograma.caras || []);
+            limpiarMensaje();
+        } catch (err) {
+            mostrarMensaje(err.message, 'danger');
+        }
+    }
+
+    async function guardarVersion() {
+        if (!cambiosPendientes.length) {
+            mostrarMensaje('No hay cambios pendientes para guardar.', 'warning');
+            return;
+        }
+        mostrarMensaje('Guardando versión...', 'info');
+        try {
+            const res = await fetch(crearVersionUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    odontograma_base_id: baseOdontogramaId,
+                    nota_general: inputNota.value.trim() || null,
+                    caras: cambiosPendientes,
+                }),
+            });
+
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || 'Error guardando la versión');
+            }
+
+            const data = await res.json();
+            mostrarMensaje('Versión creada correctamente. Redirigiendo...', 'success');
+            setTimeout(() => {
+                const destino = `${verOdontogramaUrl}?odontograma_id=${data.odontograma.id}`;
+                window.location.href = destino;
+            }, 800);
+        } catch (err) {
+            mostrarMensaje(err.message, 'danger');
+        }
+    }
+
+    function crearSlot(diente, cara, xPct, yPct) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'slot-btn';
+        btn.style.left = `${xPct}%`;
+        btn.style.top = `${yPct}%`;
+        btn.dataset.diente = diente;
+        btn.dataset.cara = cara;
+        btn.title = `${diente} - ${caraLabels[cara] || cara}`;
+        btn.textContent = cara[0].toUpperCase();
+        btn.addEventListener('click', () => {
+            if (calibrando) return;
+            if (slotSeleccionado) {
+                slotSeleccionado.classList.remove('active');
+            }
+            slotSeleccionado = btn;
+            btn.classList.add('active');
+            inputDiente.value = diente;
+            inputCara.value = cara;
+            inputMarcaTexto.focus();
+            limpiarMensaje();
+        });
+        btn.addEventListener('pointerdown', (ev) => {
+            if (!calibrando) return;
+            if (cara !== 'oclusal') return; // calibramos sobre la cara oclusal
+            ev.preventDefault();
+            startDrag(ev, btn);
+        });
+        overlay.appendChild(btn);
+    }
+
+    function construirSlots(teeth, cfgTopIn, cfgBottomIn) {
+        overlay.innerHTML = '';
+        baseTeeth = teeth.map(t => ({ ...t }));
+        cfgTop = cfgTopIn;
+        cfgBottom = cfgBottomIn;
+        teeth.forEach(t => {
+            const cfg = t.row === 'top' ? cfgTop : cfgBottom;
+            const baseX = t.x;
+            const baseY = (t.y ?? cfg.y_occlusal) + CALIB_OFFSET_Y;
+            crearSlot(t.id, 'oclusal', baseX, baseY);
+            crearSlot(t.id, 'vestibular', baseX, baseY + cfg.delta_vestibular);
+            crearSlot(t.id, 'lingual', baseX, baseY + cfg.delta_lingual);
+            crearSlot(t.id, 'mesial', baseX + cfg.delta_mesial, baseY);
+            crearSlot(t.id, 'distal', baseX + cfg.delta_distal, baseY);
+        });
+        if (toggleDiscreto.checked) {
+            overlay.classList.add('slot-hidden');
+        } else {
+            overlay.classList.remove('slot-hidden');
+        }
+    }
+
+    function obtenerPosCara(dienteData, cara) {
+        const cfg = dienteData.row === 'top' ? cfgTop : cfgBottom;
+        if (!cfg) return { x: dienteData.x, y: dienteData.y ?? 50 };
+        const baseX = dienteData.x;
+        const baseY = (typeof dienteData.y === 'number' ? dienteData.y : cfg.y_occlusal) + CALIB_OFFSET_Y;
+        const offsets = {
+            oclusal: { x: 0, y: 0 },
+            vestibular: { x: 0, y: cfg.delta_vestibular },
+            lingual: { x: 0, y: cfg.delta_lingual },
+            mesial: { x: cfg.delta_mesial, y: 0 },
+            distal: { x: cfg.delta_distal, y: 0 },
+        };
+        const off = offsets[cara] || offsets.oclusal;
+        return { x: baseX + off.x, y: baseY + off.y };
+    }
+
+    async function cargarSlots() {
+        try {
+            const res = await fetch(slotsUrl);
+            if (!res.ok) throw new Error('No se pudo cargar slots predefinidos');
+            const data = await res.json();
+            if (!data?.teeth?.length) throw new Error('Config de slots inválida');
+            cfgTop = data.config?.top || { y_occlusal: 32, delta_vestibular: 6, delta_lingual: -6, delta_mesial: -3, delta_distal: 3 };
+            cfgBottom = data.config?.bottom || { y_occlusal: 68, delta_vestibular: 6, delta_lingual: -6, delta_mesial: -3, delta_distal: 3 };
+            construirSlots(data.teeth, cfgTop, cfgBottom);
+        } catch (err) {
+            console.warn('Usando slots por defecto', err);
+            // Fallback simple si no carga JSON
+            const dientesFilaSuperior = ['18','17','16','15','14','13','12','11','21','22','23','24','25','26','27','28'];
+            const dientesFilaInferior = ['48','47','46','45','44','43','42','41','31','32','33','34','35','36','37','38'];
+            const totalSup = dientesFilaSuperior.length;
+            overlay.innerHTML = '';
+            dientesFilaSuperior.forEach((d, idx) => {
+                const baseX = ((idx + 1) / (totalSup + 1)) * 100;
+                const baseY = 32;
+                crearSlot(d, 'oclusal', baseX, baseY);
+                crearSlot(d, 'vestibular', baseX, baseY + 6);
+                crearSlot(d, 'lingual', baseX, baseY - 6);
+                crearSlot(d, 'mesial', baseX - 3, baseY);
+                crearSlot(d, 'distal', baseX + 3, baseY);
+            });
+            const totalInf = dientesFilaInferior.length;
+            dientesFilaInferior.forEach((d, idx) => {
+                const baseX = ((idx + 1) / (totalInf + 1)) * 100;
+                const baseY = 68;
+                crearSlot(d, 'oclusal', baseX, baseY);
+                crearSlot(d, 'vestibular', baseX, baseY + 6);
+                crearSlot(d, 'lingual', baseX, baseY - 6);
+                crearSlot(d, 'mesial', baseX - 3, baseY);
+                crearSlot(d, 'distal', baseX + 3, baseY);
+            });
+        }
+    }
+
+    function startDrag(ev, btn) {
+        const rect = overlay.getBoundingClientRect();
+        dragState = { btn, rect, diente: btn.dataset.diente };
+        window.addEventListener('pointermove', onDrag);
+        window.addEventListener('pointerup', endDrag, { once: true });
+    }
+
+    function onDrag(ev) {
+        if (!dragState) return;
+        const { rect, btn, diente } = dragState;
+        const xPct = ((ev.clientX - rect.left) / rect.width) * 100;
+        const yPct = ((ev.clientY - rect.top) / rect.height) * 100;
+        btn.style.left = `${xPct}%`;
+        btn.style.top = `${yPct}%`;
+        dragState.xPct = xPct;
+        dragState.yPct = yPct;
+    }
+
+    function endDrag(ev) {
+        window.removeEventListener('pointermove', onDrag);
+        if (!dragState) return;
+        const { diente, xPct, yPct } = dragState;
+        if (typeof xPct === 'number' && typeof yPct === 'number') {
+            const idx = baseTeeth.findIndex(t => t.id === diente);
+            if (idx >= 0) {
+                baseTeeth[idx].x = xPct;
+                baseTeeth[idx].y = yPct;
+                construirSlots(baseTeeth, cfgTop, cfgBottom);
+            }
+        }
+        dragState = null;
+    }
+
+    function setCalibracion(on) {
+        calibrando = on;
+        btnCalibrar.classList.toggle('btn-secondary', !on);
+        btnCalibrar.classList.toggle('btn-warning', on);
+        btnCalibrar.textContent = on ? 'Salir calibración' : 'Calibrar';
+        btnGuardarSlots.disabled = !on;
+        overlay.classList.toggle('slot-hidden', toggleDiscreto.checked && !on);
+    }
+
+    async function guardarSlotsCalibrados() {
+        if (!baseTeeth.length || !cfgTop || !cfgBottom) {
+            mostrarMensaje('No hay datos de slots para guardar.', 'warning');
+            return;
+        }
+        mostrarMensaje('Guardando calibración...', 'info');
+        try {
+            const res = await fetch(slotsSaveUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ config: { top: cfgTop, bottom: cfgBottom }, teeth: baseTeeth }),
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || 'No se pudo guardar');
+            }
+            mostrarMensaje('Calibración guardada. Recargá para verificar.', 'success');
+        } catch (err) {
+            mostrarMensaje(err.message, 'danger');
+        }
+    }
+
+    function renderAnomalias(caras) {
+        if (!baseTeeth.length) return;
+        anomOverlay.innerHTML = '';
+        const marks = [];
+        (caras || []).forEach(c => {
+            const texto = (c.marca_texto || '').toLowerCase();
+            const codigo = (c.marca_codigo || '').toLowerCase();
+            let tipo = null;
+            if (texto.includes('extra') || texto.includes('ausente') || texto.includes('exodoncia') || codigo === 'exo' || codigo === 'x') {
+                tipo = 'exodoncia';
+            } else if (texto || codigo) {
+                tipo = 'alerta';
+            }
+            if (!tipo) return;
+            marks.push({ diente: c.diente, cara: c.cara || 'oclusal', tipo });
+        });
+
+        marks.forEach(m => {
+            const t = baseTeeth.find(bt => bt.id === m.diente);
+            if (!t) return;
+            const pos = obtenerPosCara(t, m.cara);
+            const mark = document.createElement('div');
+            mark.className = `anomalia-mark ${m.tipo === 'exodoncia' ? 'anomalia-exodoncia' : 'anomalia-alerta'}`;
+            mark.style.left = `${pos.x}%`;
+            mark.style.top = `${(pos.y ?? 50) + MARK_OFFSET_Y}%`;
+            mark.textContent = m.tipo === 'exodoncia' ? '✕' : '◆';
+            anomOverlay.appendChild(mark);
+        });
+    }
+
+    // Event listeners
+    document.getElementById('form-cara').addEventListener('submit', (e) => {
+        e.preventDefault();
+        agregarCambio(false);
+    });
+
+    document.getElementById('btn-borrar-cara').addEventListener('click', () => {
+        agregarCambio(true);
+    });
+
+    document.getElementById('btn-limpiar-form').addEventListener('click', () => {
+        limpiarForm();
+    });
+
+    document.getElementById('btn-guardar-version').addEventListener('click', () => {
+        guardarVersion();
+    });
+
+    toggleDiscreto.addEventListener('change', () => {
+        if (toggleDiscreto.checked) {
+            overlay.classList.add('slot-hidden');
+        } else {
+            overlay.classList.remove('slot-hidden');
+        }
+    });
+
+    btnCalibrar.addEventListener('click', () => {
+        setCalibracion(!calibrando);
+    });
+
+    btnGuardarSlots.addEventListener('click', () => {
+        guardarSlotsCalibrados();
+    });
+
+    // Cargar slots primero, luego datos; renderAnomalias requiere baseTeeth poblado
+    (async () => {
+        await cargarSlots();
+        await cargarDatosIniciales();
+    })();
+})();
+</script>
+{% endblock %}
