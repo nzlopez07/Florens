@@ -39,6 +39,10 @@ def show_help():
    └─ Servidor web de desarrollo
    └─ Uso: python run.py
 
+🌎 sync_localidades_salta.py
+   └─ Sincroniza localidades de Salta desde API georef nacional
+   └─ Uso: python sync_localidades_salta.py
+
 ❓ help.py
    └─ Este archivo de ayuda
    └─ Uso: python help.py

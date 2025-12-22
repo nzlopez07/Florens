@@ -3,10 +3,23 @@ import json
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from flask import render_template, request, redirect, url_for, flash, jsonify, send_from_directory, current_app
-from app.models import Prestacion
-from app.services.paciente_service import PacienteService
-from app.services.turno_service import TurnoService
-from app.services.odontograma_service import OdontogramaService
+from app.models import Prestacion, ObraSocial, Localidad
+from app.services.paciente import (
+    BuscarPacientesService,
+    CrearPacienteService,
+    EditarPacienteService,
+)
+from app.services.odontograma import (
+  ObtenerOdontogramaService,
+  CrearVersionOdontogramaService,
+)
+from app.services.common import (
+    PacienteNoEncontradoError,
+    PacienteDuplicadoError,
+    DatosInvalidosPacienteError,
+    LocalidadNoEncontradaError,
+    PacienteError,
+)
 from . import main_bp
 
 
@@ -49,7 +62,7 @@ def listar_pacientes():
         description: Lista de pacientes obtenida exitosamente
     """
     termino_busqueda = request.args.get('buscar', '').strip()
-    pacientes = PacienteService.listar_pacientes(termino_busqueda)
+    pacientes = BuscarPacientesService.buscar(termino_busqueda)
     return render_template(
       'pacientes/lista.html',
       pacientes=pacientes,
@@ -114,29 +127,36 @@ def crear_paciente():
       302:
         description: Redirección después de crear paciente exitosamente
     """
-    obras_sociales = PacienteService.listar_obras_sociales()
-    localidades = PacienteService.listar_localidades()
+    obras_sociales = ObraSocial.query.order_by(ObraSocial.nombre).all()
+    localidades = Localidad.query.order_by(Localidad.nombre).all()
 
     if request.method == 'POST':
         try:
             fecha_nac = datetime.strptime(request.form['fecha_nac'], '%Y-%m-%d').date() if request.form.get('fecha_nac') else None
-            PacienteService.crear_paciente({
-                'nombre': request.form['nombre'],
-                'apellido': request.form['apellido'],
-                'dni': request.form['dni'],
-                'fecha_nac': fecha_nac,
-                'telefono': request.form.get('telefono'),
-                'direccion': request.form.get('direccion'),
-                'obra_social_id': int(request.form['obra_social_id']) if request.form.get('obra_social_id') else None,
-                'localidad_id': int(request.form['localidad_id']) if request.form.get('localidad_id') else None,
-                'nro_afiliado': request.form.get('carnet'),
-                'titular': request.form.get('titular'),
-                'parentesco': request.form.get('parentesco'),
-                'lugar_trabajo': request.form.get('lugar_trabajo'),
-                'barrio': request.form.get('barrio'),
-            })
+            localidad_nombre = request.form.get('localidad_nombre', '').strip() or None
+
+            CrearPacienteService.execute(
+              nombre=request.form['nombre'],
+              apellido=request.form['apellido'],
+              dni=request.form['dni'],
+              fecha_nac=fecha_nac,
+              telefono=request.form.get('telefono'),
+              direccion=request.form.get('direccion'),
+              barrio=request.form.get('barrio'),
+              localidad_nombre=localidad_nombre,
+              localidad_id=int(request.form['localidad_id']) if request.form.get('localidad_id') else None,
+              obra_social_id=int(request.form['obra_social_id']) if request.form.get('obra_social_id') else None,
+              nro_afiliado=request.form.get('carnet'),
+              titular=request.form.get('titular'),
+              parentesco=request.form.get('parentesco'),
+              lugar_trabajo=request.form.get('lugar_trabajo'),
+            )
             flash('Paciente creado exitosamente', 'success')
             return redirect(url_for('main.listar_pacientes'))
+        except (DatosInvalidosPacienteError, PacienteDuplicadoError, LocalidadNoEncontradaError) as e:
+            flash(str(e), 'error')
+        except PacienteError as e:
+            flash(str(e), 'error')
         except Exception as e:
             flash(f'Error al crear paciente: {str(e)}', 'error')
 
@@ -166,17 +186,22 @@ def ver_paciente(id: int):
       404:
         description: Paciente no encontrado
     """
-    paciente, turnos, prestaciones, edad, totales = PacienteService.obtener_detalle(id)
-    if not paciente:
+    try:
+        detalle = BuscarPacientesService.obtener_detalle_completo(id)
+    except PacienteNoEncontradoError:
         return redirect(url_for('main.listar_pacientes'))
 
+    paciente = detalle['paciente']
+    turnos = detalle['turnos']
+    prestaciones = detalle['prestaciones']
+    edad = detalle.get('edad')
     estadisticas = {
-      'total_turnos': totales['turnos'] if totales else 0,
-      'total_prestaciones': totales['prestaciones'] if totales else 0,
+      'total_turnos': detalle.get('total_turnos', 0),
+      'total_prestaciones': detalle.get('total_prestaciones', 0),
     }
 
     # Obtener estado del odontograma (si está desactualizado)
-    odontograma, _, desactualizado_odonto, ultima_prestacion = OdontogramaService.obtener_o_crear_actual(id)
+    odontograma, _, desactualizado_odonto, ultima_prestacion = ObtenerOdontogramaService.obtener_actual(id)
     
     # Marcar prestaciones posteriores al odontograma
     prestaciones_nuevas = set()
@@ -211,14 +236,14 @@ def ver_odontograma_paciente(id: int):
         odontograma_id = request.args.get('odontograma_id', type=int)
 
         if odontograma_id:
-            odontograma, versiones, desactualizado, ultima_prestacion = OdontogramaService.obtener_version(
+            odontograma, versiones, desactualizado, ultima_prestacion = ObtenerOdontogramaService.obtener_version(
                 paciente_id=id, odontograma_id=odontograma_id
             )
             if not odontograma:
                 flash('Odontograma no encontrado para este paciente', 'error')
                 return redirect(url_for('main.ver_paciente', id=id))
         else:
-            odontograma, versiones, desactualizado, ultima_prestacion = OdontogramaService.obtener_o_crear_actual(id)
+            odontograma, versiones, desactualizado, ultima_prestacion = ObtenerOdontogramaService.obtener_actual(id)
 
         return render_template(
             'pacientes/odontograma.html',
@@ -238,16 +263,39 @@ def obtener_datos_odontograma(id: int):
     try:
         odontograma_id = request.args.get('odontograma_id', type=int)
         if odontograma_id:
-            odontograma, versiones, desactualizado, ultima_prestacion = OdontogramaService.obtener_version(
+            odontograma, versiones, desactualizado, ultima_prestacion = ObtenerOdontogramaService.obtener_version(
                 paciente_id=id, odontograma_id=odontograma_id
             )
             if not odontograma:
                 return jsonify({"error": "Odontograma no encontrado"}), 404
         else:
-            odontograma, versiones, desactualizado, ultima_prestacion = OdontogramaService.obtener_o_crear_actual(id)
+            odontograma, versiones, desactualizado, ultima_prestacion = ObtenerOdontogramaService.obtener_actual(id)
+
+        def _serializar_odontograma(od):
+          return {
+            "id": od.id,
+            "paciente_id": od.paciente_id,
+            "version_seq": od.version_seq,
+            "es_actual": od.es_actual,
+            "nota_general": od.nota_general,
+            "ultima_prestacion_registrada_en": od.ultima_prestacion_registrada_en.isoformat() if od.ultima_prestacion_registrada_en else None,
+            "creado_en": od.creado_en.isoformat() if od.creado_en else None,
+            "actualizado_en": od.actualizado_en.isoformat() if od.actualizado_en else None,
+            "caras": [
+              {
+                "id": c.id,
+                "diente": getattr(c, 'diente', None),
+                "cara": getattr(c, 'cara', None),
+                "marca_codigo": getattr(c, 'marca_codigo', None),
+                "marca_texto": getattr(c, 'marca_texto', None),
+                "comentario": getattr(c, 'comentario', None),
+              }
+              for c in getattr(od, 'caras', [])
+            ]
+          }
 
         return jsonify({
-            "odontograma": OdontogramaService._serializar_odontograma(odontograma),
+            "odontograma": _serializar_odontograma(odontograma),
             "versiones": [
                 {
                     "id": v.id,
@@ -274,14 +322,15 @@ def crear_version_odontograma(id: int):
     base_id = data.get('odontograma_base_id')
 
     try:
-        nuevo, versiones = OdontogramaService.crear_version_desde(
+        nuevo, versiones = CrearVersionOdontogramaService.execute(
             paciente_id=id,
             cambios_caras=cambios,
             nota_general=nota_general,
             base_odontograma_id=base_id,
         )
 
-        ultima_prestacion = OdontogramaService._ultima_prestacion_timestamp(id)
+        # Consultar última prestación para marcar desactualización
+        _, _, _, ultima_prestacion = ObtenerOdontogramaService.obtener_actual(id)
         desactualizado = False
         if ultima_prestacion and (
             not nuevo.ultima_prestacion_registrada_en
@@ -289,8 +338,31 @@ def crear_version_odontograma(id: int):
         ):
             desactualizado = True
 
+        def _serializar_odontograma(od):
+            return {
+                "id": od.id,
+                "paciente_id": od.paciente_id,
+                "version_seq": od.version_seq,
+                "es_actual": od.es_actual,
+                "nota_general": od.nota_general,
+                "ultima_prestacion_registrada_en": od.ultima_prestacion_registrada_en.isoformat() if od.ultima_prestacion_registrada_en else None,
+                "creado_en": od.creado_en.isoformat() if od.creado_en else None,
+                "actualizado_en": od.actualizado_en.isoformat() if od.actualizado_en else None,
+                "caras": [
+                    {
+                        "id": c.id,
+                        "diente": getattr(c, 'diente', None),
+                        "cara": getattr(c, 'cara', None),
+                        "marca_codigo": getattr(c, 'marca_codigo', None),
+                        "marca_texto": getattr(c, 'marca_texto', None),
+                        "comentario": getattr(c, 'comentario', None),
+                    }
+                    for c in getattr(od, 'caras', [])
+                ]
+            }
+
         return jsonify({
-            "odontograma": OdontogramaService._serializar_odontograma(nuevo),
+            "odontograma": _serializar_odontograma(nuevo),
             "versiones": [
                 {
                     "id": v.id,
@@ -313,35 +385,44 @@ def crear_version_odontograma(id: int):
 @main_bp.route('/pacientes/<int:id>/editar', methods=['GET', 'POST'])
 def editar_paciente(id: int):
     """Editar un paciente existente."""
-    paciente = PacienteService.obtener_paciente(id)
-    if not paciente:
+    try:
+        paciente = BuscarPacientesService.obtener_por_id(id)
+    except PacienteNoEncontradoError:
         return redirect(url_for('main.listar_pacientes'))
 
     if request.method == 'POST':
         try:
             fecha_nac = datetime.strptime(request.form['fecha_nac'], '%Y-%m-%d').date() if request.form.get('fecha_nac') else None
-            PacienteService.actualizar_paciente(paciente, {
-                'nombre': request.form['nombre'],
-                'apellido': request.form['apellido'],
-                'dni': request.form['dni'],
-                'fecha_nac': fecha_nac,
-                'telefono': request.form.get('telefono'),
-                'direccion': request.form.get('direccion'),
-                'obra_social_id': int(request.form['obra_social_id']) if request.form.get('obra_social_id') else None,
-                'localidad_id': int(request.form['localidad_id']) if request.form.get('localidad_id') else None,
-                'nro_afiliado': request.form.get('carnet'),
-                'titular': request.form.get('titular'),
-                'parentesco': request.form.get('parentesco'),
-                'lugar_trabajo': request.form.get('lugar_trabajo'),
-                'barrio': request.form.get('barrio'),
-            })
+            localidad_nombre = request.form.get('localidad_nombre', '').strip() or None
+
+            EditarPacienteService.execute(
+                paciente_id=paciente.id,
+                nombre=request.form['nombre'],
+                apellido=request.form['apellido'],
+                dni=request.form['dni'],
+                fecha_nac=fecha_nac,
+                telefono=request.form.get('telefono'),
+                direccion=request.form.get('direccion'),
+                barrio=request.form.get('barrio'),
+                localidad_nombre=localidad_nombre,
+                localidad_id=int(request.form['localidad_id']) if request.form.get('localidad_id') else None,
+                obra_social_id=int(request.form['obra_social_id']) if request.form.get('obra_social_id') else None,
+                nro_afiliado=request.form.get('carnet'),
+                titular=request.form.get('titular'),
+                parentesco=request.form.get('parentesco'),
+                lugar_trabajo=request.form.get('lugar_trabajo'),
+            )
             flash('Paciente actualizado exitosamente', 'success')
             return redirect(url_for('main.ver_paciente', id=paciente.id))
+        except (DatosInvalidosPacienteError, PacienteDuplicadoError, LocalidadNoEncontradaError) as e:
+            flash(str(e), 'error')
+        except PacienteError as e:
+            flash(str(e), 'error')
         except Exception as e:
             flash(f'Error al actualizar paciente: {str(e)}', 'error')
 
-    obras_sociales = PacienteService.listar_obras_sociales()
-    localidades = PacienteService.listar_localidades()
+    obras_sociales = ObraSocial.query.order_by(ObraSocial.nombre).all()
+    localidades = Localidad.query.order_by(Localidad.nombre).all()
 
     return render_template(
         'pacientes/formulario.html',

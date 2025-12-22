@@ -10,12 +10,14 @@
             <div class="row g-3">
                 <div class="col-md-6">
                     <label class="form-label">Paciente</label>
-                    <select name="paciente_id" class="form-select" required>
-                        <option value="" disabled selected>Seleccione...</option>
+                    <input type="hidden" id="pacienteId" name="paciente_id" required>
+                    <input list="pacientesList" id="pacienteInput" class="form-control" placeholder="Escriba nombre o DNI" autocomplete="off" required>
+                    <datalist id="pacientesList">
                         {% for paciente in pacientes %}
-                        <option value="{{ paciente.id }}">{{ paciente.apellido }}, {{ paciente.nombre }} (DNI: {{ paciente.dni }})</option>
+                        <option value="{{ paciente.apellido }}, {{ paciente.nombre }} (DNI: {{ paciente.dni }})" data-id="{{ paciente.id }}"></option>
                         {% endfor %}
-                    </select>
+                    </datalist>
+                    <small class="text-muted">Seleccione de la lista; se filtra mientras escribe.</small>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Fecha</label>
@@ -38,12 +40,9 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Estado</label>
-                    <select name="estado" class="form-select">
-                        <option value="Pendiente" selected>Pendiente</option>
-                        {% for estado in estados %}
-                        <option value="{{ estado.nombre }}">{{ estado.nombre }}</option>
-                        {% endfor %}
-                    </select>
+                    <input type="hidden" name="estado" value="Confirmado">
+                    <div class="form-control bg-light">Confirmado (creado desde la web)</div>
+                    <small class="text-muted">Los turnos web se crean confirmados por defecto.</small>
                 </div>
                 <div class="col-12">
                     <label class="form-label">Detalle</label>
@@ -57,4 +56,41 @@
         </form>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const input = document.getElementById('pacienteInput');
+    const hiddenId = document.getElementById('pacienteId');
+    const list = document.getElementById('pacientesList');
+    if (!input || !hiddenId || !list) return;
+
+    // Map displayed text to patient id for quick lookup
+    const optionMap = new Map();
+    Array.from(list.options).forEach(opt => {
+        optionMap.set(opt.value, opt.dataset.id);
+    });
+
+    input.addEventListener('input', function() {
+        const val = this.value;
+        const matchedId = optionMap.get(val);
+        hiddenId.value = matchedId || '';
+        if (!matchedId) {
+            this.setCustomValidity('Seleccione un paciente de la lista');
+        } else {
+            this.setCustomValidity('');
+        }
+    });
+
+    input.addEventListener('blur', function() {
+        const val = this.value;
+        const matchedId = optionMap.get(val);
+        hiddenId.value = matchedId || '';
+        if (!matchedId && val.trim() !== '') {
+            this.setCustomValidity('Seleccione un paciente de la lista');
+        } else {
+            this.setCustomValidity('');
+        }
+    });
+});
+</script>
 {% endblock %}

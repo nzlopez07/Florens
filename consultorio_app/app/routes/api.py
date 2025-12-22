@@ -7,8 +7,9 @@ from flask import jsonify, request
 from sqlalchemy.orm import joinedload
 from app.database.session import DatabaseSession
 from app.models import Paciente, Turno, Prestacion, Estado, CambioEstado
-from app.services import BusquedaUtils
-from app.services.prestacion_service import PrestacionService
+from app.services.practica import ListarPracticasService
+from app.services.paciente import BuscarPacientesService
+from app.services.common import PacienteNoEncontradoError
 from . import main_bp
 
 
@@ -65,7 +66,7 @@ def api_listar_pacientes():
     """
     termino_busqueda = request.args.get('buscar', '').strip()
     if termino_busqueda:
-        pacientes = BusquedaUtils.buscar_pacientes_simple(termino_busqueda)
+      pacientes = BuscarPacientesService.buscar(termino_busqueda)
     else:
         pacientes = Paciente.query.all()
 
@@ -359,15 +360,22 @@ def api_actualizar_turnos_vencidos():
 
 @main_bp.route('/api/pacientes/<int:paciente_id>/practicas')
 def api_listar_practicas_paciente(paciente_id: int):
-    practicas = PrestacionService.listar_practicas_para_paciente(paciente_id)
-    practicas_data = [
-        {
-            'id': p.id,
-            'codigo': p.codigo,
-            'descripcion': p.descripcion,
-            'proveedor_tipo': p.proveedor_tipo,
-            'monto_unitario': p.monto_unitario,
-        }
-        for p in practicas
-    ]
-    return jsonify({'paciente_id': paciente_id, 'practicas': practicas_data})
+  try:
+    paciente = BuscarPacientesService.obtener_por_id(paciente_id)
+  except PacienteNoEncontradoError:
+    return jsonify({'error': 'Paciente no encontrado'}), 404
+
+  obra_social_id = paciente.obra_social_id
+  practicas = ListarPracticasService.listar_por_proveedor(obra_social_id)
+
+  practicas_data = [
+    {
+      'id': p.id,
+      'codigo': p.codigo,
+      'descripcion': p.descripcion,
+      'proveedor_tipo': p.proveedor_tipo,
+      'monto_unitario': p.monto_unitario,
+    }
+    for p in practicas
+  ]
+  return jsonify({'paciente_id': paciente_id, 'practicas': practicas_data, 'obra_social_id': obra_social_id})

@@ -1,5 +1,15 @@
 from flask import render_template, request, redirect, url_for, flash
-from app.services.practica_service import PracticaService
+from app.services.practica import (
+    ListarPracticasService,
+    CrearPracticaService,
+    EditarPracticaService,
+    EliminarPracticaService,
+)
+from app.services.common import (
+    PracticaNoEncontradaError,
+    PracticaConDependenciasError,
+    DatosInvalidosError,
+)
 from app.models import ObraSocial
 from . import main_bp
 
@@ -11,15 +21,15 @@ def listar_practicas():
     if proveedor_filter == 'IPSS':
         ipss = ObraSocial.query.filter_by(nombre='IPSS').first()
         obra_social_id = ipss.id if ipss else None
-        practicas = PracticaService.listar_por_proveedor(obra_social_id) if obra_social_id else []
+        practicas = ListarPracticasService.listar_por_proveedor(obra_social_id) if obra_social_id else []
         titulo = 'IPSS'
     elif proveedor_filter == 'SANCOR':
         sancor = ObraSocial.query.filter_by(nombre='SANCOR SALUD').first()
         obra_social_id = sancor.id if sancor else None
-        practicas = PracticaService.listar_por_proveedor(obra_social_id) if obra_social_id else []
+        practicas = ListarPracticasService.listar_por_proveedor(obra_social_id) if obra_social_id else []
         titulo = 'SANCOR SALUD'
     else:
-        practicas = PracticaService.listar_por_proveedor()
+        practicas = ListarPracticasService.listar_por_proveedor()
         titulo = 'Particular'
     
     return render_template('practicas/lista.html', practicas=practicas, titulo=titulo, proveedor_filter=proveedor_filter)
@@ -34,17 +44,22 @@ def crear_practica():
             proveedor_tipo = request.form.get('proveedor_tipo', 'PARTICULAR')
             obra_social_id = None
             if proveedor_tipo == 'OBRA_SOCIAL':
-                obra_social_id = request.form.get('obra_social_id')
+                obra_social_id_str = request.form.get('obra_social_id')
+                obra_social_id = int(obra_social_id_str) if obra_social_id_str else None
             
-            PracticaService.crear_practica({
+            practica = CrearPracticaService.execute({
                 'codigo': request.form['codigo'],
                 'descripcion': request.form['descripcion'],
                 'proveedor_tipo': proveedor_tipo,
                 'obra_social_id': obra_social_id,
-                'monto_unitario': request.form['monto_unitario']
+                'monto_unitario': float(request.form['monto_unitario'])
             })
             flash('Práctica creada exitosamente', 'success')
             return redirect(url_for('main.listar_practicas'))
+        except DatosInvalidosError as e:
+            flash(str(e), 'error')
+        except ValueError as e:
+            flash(f'Datos inválidos: {str(e)}', 'error')
         except Exception as e:
             flash(f'Error al crear práctica: {str(e)}', 'error')
     
@@ -53,8 +68,10 @@ def crear_practica():
 
 @main_bp.route('/practicas/<int:id>/editar', methods=['GET', 'POST'])
 def editar_practica(id: int):
-    practica = PracticaService.obtener_practica(id)
-    if not practica:
+    try:
+        practica = ListarPracticasService.obtener_por_id(id)
+    except PracticaNoEncontradaError:
+        flash('Práctica no encontrada', 'error')
         return redirect(url_for('main.listar_practicas'))
     
     obras_sociales = ObraSocial.query.all()
@@ -64,17 +81,22 @@ def editar_practica(id: int):
             proveedor_tipo = request.form.get('proveedor_tipo', 'PARTICULAR')
             obra_social_id = None
             if proveedor_tipo == 'OBRA_SOCIAL':
-                obra_social_id = request.form.get('obra_social_id')
+                obra_social_id_str = request.form.get('obra_social_id')
+                obra_social_id = int(obra_social_id_str) if obra_social_id_str else None
             
-            PracticaService.actualizar_practica(id, {
+            practica = EditarPracticaService.execute(id, {
                 'codigo': request.form['codigo'],
                 'descripcion': request.form['descripcion'],
                 'proveedor_tipo': proveedor_tipo,
                 'obra_social_id': obra_social_id,
-                'monto_unitario': request.form['monto_unitario']
+                'monto_unitario': float(request.form['monto_unitario'])
             })
             flash('Práctica actualizada exitosamente', 'success')
             return redirect(url_for('main.listar_practicas'))
+        except (PracticaNoEncontradaError, DatosInvalidosError) as e:
+            flash(str(e), 'error')
+        except ValueError as e:
+            flash(f'Datos inválidos: {str(e)}', 'error')
         except Exception as e:
             flash(f'Error al actualizar práctica: {str(e)}', 'error')
     
@@ -84,10 +106,12 @@ def editar_practica(id: int):
 @main_bp.route('/practicas/<int:id>/eliminar', methods=['POST'])
 def eliminar_practica(id: int):
     try:
-        if PracticaService.eliminar_practica(id):
-            flash('Práctica eliminada exitosamente', 'success')
-        else:
-            flash('Práctica no encontrada', 'error')
+        resultado = EliminarPracticaService.execute(id)
+        flash(resultado['mensaje'], 'success')
+    except PracticaNoEncontradaError as e:
+        flash(str(e), 'error')
+    except PracticaConDependenciasError as e:
+        flash(str(e), 'error')
     except Exception as e:
         flash(f'Error al eliminar práctica: {str(e)}', 'error')
     

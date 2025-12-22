@@ -286,13 +286,18 @@ def main():
     # Configuración del servidor
     host = os.environ.get('FLASK_HOST', '127.0.0.1')
     port = int(os.environ.get('FLASK_PORT', 5000))
-    debug = os.environ.get('FLASK_ENV') == 'development'
+    debug = (
+        os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes')
+        or os.environ.get('FLASK_ENV') == 'development'
+    )
+    # Habilita autoreload solo en debug para evitar doble proceso en prod
+    use_reloader = debug and os.environ.get('FLASK_USE_RELOADER', '1').lower() not in ('0', 'false', 'no')
     
     print(f"[SERVER] Iniciando servidor en http://{host}:{port}")
     print("[HELP] Para ver ayuda: python help.py")
     print("[QUICK] Para verificacion rapida: python quick_start.py")
     
-    app.run(host=host, port=port, debug=debug)
+    app.run(host=host, port=port, debug=debug, use_reloader=use_reloader)
 
 if __name__ == "__main__":
     main()

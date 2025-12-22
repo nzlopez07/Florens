@@ -1,26 +1,163 @@
 """
-Módulo de servicios del sistema de gestión de consultorio odontológico.
+Módulo de servicios refactorizado siguiendo arquitectura de casos de uso.
 
-Este módulo contiene la lógica de negocio del sistema, separada de las rutas
-y la presentación. Los servicios encapsulan las operaciones complejas y
-proporcionan una interfaz limpia para las diferentes funcionalidades.
+Estructura por dominio funcional:
+- paciente/: Crear, editar, buscar pacientes
+- turno/: Agendar, cambiar estado de turnos
+- localidad/: Buscar, crear localidades
+- obra_social/: Buscar obras sociales
+- odontograma/: Obtener, crear versiones de odontogramas
+- prestacion/: Listar prestaciones
+- practica/: Listar prácticas
+- common/: Excepciones y validadores reutilizables
+- conversacion/: Placeholder para futura integración WhatsApp
 
-Servicios disponibles:
-- TurnoService: Gestión de turnos y citas
-- TurnoValidaciones: Validaciones específicas para turnos
-- FormateoUtils: Utilidades de formateo
-- EstadoTurnoUtils: Utilidades para manejo de estados
-- BusquedaUtils: Utilidades para búsqueda flexible de texto
+Principios arquitectónicos:
+- Cada service implementa UN caso de uso
+- Sin imports de Flask
+- Lógica de negocio encapsulada en services
+- Routes son adaptadores HTTP delgados
+- Excepciones propias para errores de negocio
 """
 
-from .turno_service import TurnoService
-from .turno_utils import TurnoValidaciones, FormateoUtils, EstadoTurnoUtils
-from .busqueda_utils import BusquedaUtils
+
+# Nuevos services por dominio
+from .common import (
+    OdontoAppError,
+    PacienteError,
+    PacienteNoEncontradoError,
+    PacienteDuplicadoError,
+    DatosInvalidosPacienteError,
+    LocalidadError,
+    LocalidadNoEncontradaError,
+    TurnoError,
+    TurnoNoEncontradoError,
+    TurnoSolapamientoError,
+    TurnoFechaInvalidaError,
+    TurnoHoraInvalidaError,
+    TurnoDuracionInvalidaError,
+    TransicionEstadoInvalidaError,
+    EstadoFinalError,
+    TurnoYaAtendidoError,
+    TurnoPendienteEliminableError,
+    OdontogramaError,
+    OdontogramaNoEncontradoError,
+    ConversacionError,
+    MensajeInvalidoError,
+    BaseDatosError,
+    TransactionError,
+    ValidadorPaciente,
+    ValidadorTurno,
+    ValidadorLocalidad,
+)
+
+from .paciente import (
+    CrearPacienteService,
+    EditarPacienteService,
+    BuscarPacientesService,
+)
+
+from .turno import (
+    AgendarTurnoService,
+    CambiarEstadoTurnoService,
+    ObtenerAgendaService,
+    ListarTurnosService,
+    ObtenerHorariosService,
+    EliminarTurnoService,
+)
+
+from .localidad import (
+    BuscarLocalidadesService,
+    CrearLocalidadService,
+)
+
+from .obra_social import (
+    BuscarObrasSocialesService,
+)
+
+from .odontograma import (
+    ObtenerOdontogramaService,
+    CrearVersionOdontogramaService,
+)
+
+from .prestacion import (
+    ListarPrestacionesService,
+    CrearPrestacionService,
+)
+
+from .practica import (
+    ListarPracticasService,
+    CrearPracticaService,
+    EditarPracticaService,
+    EliminarPracticaService,
+)
 
 __all__ = [
-    'TurnoService',
+    # Legacy utils
     'TurnoValidaciones',
     'FormateoUtils',
     'EstadoTurnoUtils',
     'BusquedaUtils',
+    
+    # Common (excepciones y validadores)
+    'OdontoAppError',
+    'PacienteError',
+    'PacienteNoEncontradoError',
+    'PacienteDuplicadoError',
+    'DatosInvalidosPacienteError',
+    'LocalidadError',
+    'LocalidadNoEncontradaError',
+    'TurnoError',
+    'TurnoNoEncontradoError',
+    'TurnoSolapamientoError',
+    'TurnoFechaInvalidaError',
+    'TurnoHoraInvalidaError',
+    'TurnoDuracionInvalidaError',
+    'TransicionEstadoInvalidaError',
+    'EstadoFinalError',
+    'TurnoYaAtendidoError',
+    'TurnoPendienteEliminableError',
+    'OdontogramaError',
+    'OdontogramaNoEncontradoError',
+    'ConversacionError',
+    'MensajeInvalidoError',
+    'BaseDatosError',
+    'TransactionError',
+    'ValidadorPaciente',
+    'ValidadorTurno',
+    'ValidadorLocalidad',
+    
+    # Paciente services
+    'CrearPacienteService',
+    'EditarPacienteService',
+    'BuscarPacientesService',
+    
+    # Turno services
+    'AgendarTurnoService',
+    'CambiarEstadoTurnoService',
+    'ObtenerAgendaService',
+    'ListarTurnosService',
+    'ObtenerHorariosService',
+    'EliminarTurnoService',
+    
+    # Localidad services
+    'BuscarLocalidadesService',
+    'CrearLocalidadService',
+    
+    # ObraSocial services
+    'BuscarObrasSocialesService',
+    
+    # Odontograma services
+    'ObtenerOdontogramaService',
+    'CrearVersionOdontogramaService',
+    
+    # Prestacion services
+    'ListarPrestacionesService',
+    'CrearPrestacionService',
+    
+    # Practica services
+    'ListarPracticasService',
+    'CrearPracticaService',
+    'EditarPracticaService',
+    'EliminarPracticaService',
 ]

@@ -83,18 +83,18 @@
                                    value="{{ paciente.barrio if paciente else '' }}">
                         </div>
 
-                        <!-- Localidad -->
+                        <!-- Localidad con búsqueda y alta libre -->
                         <div class="col-md-4 mb-3">
-                            <label for="localidad_id" class="form-label">Localidad</label>
-                            <select class="form-select" id="localidad_id" name="localidad_id">
-                                <option value="">Seleccionar localidad...</option>
+                            <label for="localidad_nombre" class="form-label">Localidad</label>
+                            <input list="localidades_datalist" class="form-control" id="localidad_nombre" name="localidad_nombre"
+                                   placeholder="Escribe o elige..."
+                                   value="{{ paciente.localidad.nombre if paciente and paciente.localidad else '' }}">
+                            <datalist id="localidades_datalist">
                                 {% for localidad in localidades %}
-                                <option value="{{ localidad.id }}" 
-                                        {% if paciente and paciente.localidad_id == localidad.id %}selected{% endif %}>
-                                    {{ localidad.nombre }}
-                                </option>
+                                <option value="{{ localidad.nombre }}"></option>
                                 {% endfor %}
-                            </select>
+                            </datalist>
+                            <small class="text-muted">Puedes escribir una localidad nueva; se guardará normalizada.</small>
                         </div>
                     </div>
 

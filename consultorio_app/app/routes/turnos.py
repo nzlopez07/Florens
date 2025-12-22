@@ -1,8 +1,22 @@
 from datetime import datetime
 from flask import render_template, request, redirect, url_for, flash
 from app.models import Paciente, Estado, Turno, CambioEstado
-from app.services.turno_service import TurnoService
-from app.services.paciente_service import PacienteService
+from app.services.turno import (
+    AgendarTurnoService,
+    CambiarEstadoTurnoService,
+    ObtenerAgendaService,
+    ListarTurnosService,
+    EliminarTurnoService,
+)
+from app.services.paciente import BuscarPacientesService
+from app.services.common import (
+    TurnoNoEncontradoError,
+    TransicionEstadoInvalidaError,
+    EstadoTurnoInvalidoError,
+    TurnoSolapamientoError,
+    TurnoFechaInvalidaError,
+    PacienteNoEncontradoError,
+)
 from . import main_bp
 
 
@@ -20,28 +34,44 @@ def listar_turnos():
     """
     fecha_inicio_str = request.args.get('fecha_inicio')
     
-    # Obtener estructura de agenda para la semana
-    datos_agenda = TurnoService.obtener_semana_agenda(fecha_inicio_str)
+    # Parsear fecha si está presente
+    if fecha_inicio_str:
+        try:
+            fecha_inicio = datetime.strptime(fecha_inicio_str, '%Y-%m-%d').date()
+        except ValueError:
+            from datetime import date
+            fecha_inicio = date.today()
+    else:
+        from datetime import date
+        fecha_inicio = date.today()
+    
+    # Obtener estructura de agenda para la semana usando nuevo servicio
+    datos_agenda = ObtenerAgendaService.obtener_semana_agenda(fecha_inicio)
     
     return render_template('turnos/agenda.html', **datos_agenda)
 
 
 @main_bp.route('/pacientes/<int:paciente_id>/turnos')
 def listar_turnos_paciente(paciente_id: int):
-    paciente = PacienteService.obtener_paciente(paciente_id)
-    if not paciente:
+    try:
+        paciente = BuscarPacientesService.obtener_por_id(paciente_id)
+    except PacienteNoEncontradoError:
         flash('Paciente no encontrado', 'error')
         return redirect(url_for('main.listar_pacientes'))
 
     pagina = request.args.get('pagina', 1, type=int)
-    datos_paginacion = TurnoService.listar_turnos_paciente_pagina(paciente_id, pagina=pagina, por_pagina=10)
+    datos_paginacion = ListarTurnosService.listar_turnos_paciente_pagina(
+        paciente_id=paciente_id,
+        pagina=pagina,
+        por_pagina=10
+    )
     
     return render_template(
         'turnos/paciente_lista.html',
         paciente=paciente,
-        turnos=datos_paginacion['items'],
-        pagina_actual=datos_paginacion['pagina_actual'],
-        total_paginas=datos_paginacion['total_paginas'],
+        turnos=datos_paginacion['turnos'],
+        pagina_actual=datos_paginacion['pagina'],
+        total_paginas=datos_paginacion['paginas_totales'],
         total=datos_paginacion['total'],
     )
 
@@ -86,6 +116,11 @@ def nuevo_turno():
     """
     if request.method == 'POST':
         try:
+            paciente_id_raw = request.form.get('paciente_id')
+            if not paciente_id_raw:
+                flash('Debe seleccionar un paciente de la lista.', 'error')
+                raise ValueError('paciente_id faltante')
+
             duracion_form = request.form.get('duracion')
             horas_str = request.form.get('duracion_horas')
             minutos_str = request.form.get('duracion_minutos')
@@ -102,28 +137,30 @@ def nuevo_turno():
             if duracion_minutos is None:
                 duracion_minutos = int(duracion_form) if duracion_form is not None else 30
 
-            turno = TurnoService.crear_turno({
-                'paciente_id': request.form['paciente_id'],
-                'fecha': datetime.strptime(request.form['fecha'], '%Y-%m-%d').date(),
-                'hora': datetime.strptime(request.form['hora'], '%H:%M').time(),
-                'duracion': duracion_minutos,
-                'detalle': request.form.get('detalle'),
-                'estado': request.form.get('estado', 'Pendiente'),
-            })
+            # Todos los turnos creados vía web se crean Confirmados (AgendarTurnoService lo hace automáticamente)
+            turno = AgendarTurnoService.execute(
+                paciente_id=int(paciente_id_raw),
+                fecha=datetime.strptime(request.form['fecha'], '%Y-%m-%d').date(),
+                hora=datetime.strptime(request.form['hora'], '%H:%M').time(),
+                duracion=duracion_minutos,
+                detalle=request.form.get('detalle'),
+            )
             flash('Turno creado exitosamente', 'success')
             paciente_id = request.form.get('paciente_id')
             if paciente_id:
                 return redirect(url_for('main.ver_paciente', id=paciente_id))
             return redirect(url_for('main.listar_turnos'))
+        except (TurnoSolapamientoError, TurnoFechaInvalidaError, PacienteNoEncontradoError) as e:
+            # Errores de validación de negocio
+            flash(str(e), 'error')
         except ValueError as e:
-            # Errores de validación del servicio
-            flash(f'No se pudo crear el turno: {str(e)}', 'error')
+            # Errores de parsing de datos
+            flash(f'Datos inválidos: {str(e)}', 'error')
         except Exception as e:
             flash(f'Error inesperado al crear turno: {str(e)}', 'error')
 
     pacientes = Paciente.query.all()
-    estados = Estado.query.all()
-    return render_template('turnos/nuevo.html', pacientes=pacientes, estados=estados)
+    return render_template('turnos/nuevo.html', pacientes=pacientes)
 
 
 @main_bp.route('/turnos/<int:turno_id>')
@@ -140,7 +177,7 @@ def ver_turno(turno_id: int):
     
     # Obtener estados permitidos para el estado actual
     estado_actual = turno.estado or 'Pendiente'
-    estados_permitidos = TurnoService.TRANSICIONES_VALIDAS.get(estado_actual, [])
+    estados_permitidos = CambiarEstadoTurnoService.TRANSICIONES_VALIDAS.get(estado_actual, [])
     
     return render_template(
         'turnos/ver.html',
@@ -183,11 +220,19 @@ def cambiar_estado_turno(turno_id: int):
         flash('Estado inválido', 'error')
         return redirect(url_for('main.listar_turnos'))
 
-    turno, error = TurnoService.cambiar_estado(turno_id, nuevo_estado)
-    if error:
-      flash(error, 'error')
-    else:
-      flash('Estado actualizado', 'success')
+    try:
+        turno = CambiarEstadoTurnoService.execute(
+            turno_id=turno_id,
+            estado_nuevo=nuevo_estado,
+            motivo='Cambio de estado desde interfaz web'
+        )
+        flash('Estado actualizado correctamente', 'success')
+    except TurnoNoEncontradoError as e:
+        flash(str(e), 'error')
+    except TransicionEstadoInvalidaError as e:
+        flash(str(e), 'error')
+    except Exception as e:
+        flash(f'Error inesperado: {str(e)}', 'error')
 
     return redirect(url_for('main.listar_turnos'))
 
@@ -213,10 +258,14 @@ def eliminar_turno(turno_id: int):
       400:
         description: No se puede eliminar un turno que no está Pendiente
     """
-    turno, error = TurnoService.eliminar_turno(turno_id)
-    if error:
-      flash(error, 'error')
-    else:
-      flash('Turno eliminado exitosamente', 'success')
+    try:
+        resultado = EliminarTurnoService.execute(turno_id)
+        flash(resultado['mensaje'], 'success')
+    except TurnoNoEncontradoError as e:
+        flash(str(e), 'error')
+    except EstadoTurnoInvalidoError as e:
+        flash(str(e), 'error')
+    except Exception as e:
+        flash(f'Error inesperado: {str(e)}', 'error')
     
     return redirect(url_for('main.listar_turnos'))
