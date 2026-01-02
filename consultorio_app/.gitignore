@@ -26,10 +26,23 @@ venv/
 ENV/
 env/
 
-# Flask instance folder
+# Flask instance folder (LEGACY - ahora se usa data/)
 instance/
 *.db
 *.sqlite
+
+# Datos de la aplicación (NO commitear datos reales)
+data/
+config/settings.ini
+
+# Logs
+logs/
+*.log
+
+# PyInstaller
+build/
+dist/
+*.spec
 
 # IDE
 .vscode/
@@ -40,3 +53,8 @@ instance/
 # Sistema operativo
 .DS_Store
 Thumbs.db
+
+# Entorno y secrets
+.env
+.env.local
+

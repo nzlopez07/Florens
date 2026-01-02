@@ -6,12 +6,19 @@ Ejecuta el servidor web Flask para la aplicación.
 
 import os
 import sys
-from dotenv import load_dotenv
+import webbrowser
+from threading import Timer
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv(*args, **kwargs):
+        pass
 
 # Cargar variables de entorno desde .env
 load_dotenv()
 
 from app import create_app
+from app.config import SettingsLoader
 from app.database import db
 from app.models import *  # Importar todos los modelos para que SQLAlchemy los reconozca
 from sqlalchemy import text
@@ -45,6 +52,53 @@ def init_default_data():
     
     db.session.commit()
     print("[OK] Datos por defecto inicializados")
+
+
+def ensure_default_users():
+    """Crea usuarios base si no existen para permitir el primer ingreso."""
+    from app.models import Usuario
+
+    defaults = [
+        {
+            'username': 'admin',
+            'email': 'admin@example.local',
+            'nombre': 'Admin',
+            'apellido': 'Sistema',
+            'rol': 'ADMIN',
+            'password': 'admin123',
+        },
+        {
+            'username': 'florencia',
+            'email': 'florencia@example.local',
+            'nombre': 'Florencia',
+            'apellido': 'Lopez',
+            'rol': 'DUEÑA',
+            'password': 'emma123',
+        },
+    ]
+
+    created = 0
+    for entry in defaults:
+        user = Usuario.query.filter_by(username=entry['username']).first()
+        if user:
+            continue
+        user = Usuario(
+            username=entry['username'],
+            email=entry['email'],
+            nombre=entry['nombre'],
+            apellido=entry['apellido'],
+            rol=entry['rol'],
+            activo=True,
+        )
+        user.set_password(entry['password'])
+        db.session.add(user)
+        created += 1
+
+    if created:
+        db.session.commit()
+        print(f"[OK] Usuarios iniciales creados ({created})")
+    else:
+        print("[SKIP] Usuarios iniciales ya existen")
 
 def run_migrations_sqlite():
     """Execute DB migrations to align schema with Prestaciones and nro_afiliado.
@@ -387,6 +441,9 @@ def main():
             init_default_data()
         else:
             print("[SKIP] Carga de datos por defecto deshabilitada (FLASK_SEED_DEFAULTS no activo)")
+
+        # Crear usuarios iniciales si no existen
+        ensure_default_users()
     
     # Configuración del servidor
     host = os.environ.get('FLASK_HOST', '127.0.0.1')
@@ -406,6 +463,15 @@ def main():
     from app.scheduler import register_background_tasks
     if not use_reloader or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
         register_background_tasks(app)
+        # Abrir navegador automáticamente si está habilitado en settings.ini
+        try:
+            auto_open = SettingsLoader.get_bool('app', 'auto_open_browser', True)
+        except Exception:
+            auto_open = True
+        if auto_open:
+            url = f"http://{host}:{port}"
+            # Pequeño delay para asegurar que el servidor esté levantado
+            Timer(1.0, lambda: webbrowser.open_new(url)).start()
     
     app.run(host=host, port=port, debug=debug, use_reloader=use_reloader)
 

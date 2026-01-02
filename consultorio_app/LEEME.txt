@@ -1,0 +1,181 @@
+====================================
+FLORENS - Sistema de Gestión Dental
+====================================
+
+Versión: 1.0.0
+Fecha: Diciembre 2025
+Sistema: Local-first (datos locales, sin cloud)
+
+═══════════════════════════════════
+INSTALACIÓN Y PRIMER USO
+═══════════════════════════════════
+
+OPCIÓN 1: EJECUTAR DESDE CÓDIGO FUENTE
+---------------------------------------
+Requisitos:
+- Python 3.9 o superior instalado
+- Conexión a internet (solo para instalar dependencias)
+
+Pasos:
+1. Abrir PowerShell en la carpeta consultorio_app
+2. Activar entorno virtual:
+   .venv\Scripts\activate
+3. Instalar dependencias (solo primera vez):
+   pip install -r requirements.txt
+4. Ejecutar:
+   python run.py
+5. El navegador abrirá automáticamente en http://127.0.0.1:5000
+
+OPCIÓN 2: EJECUTAR DESDE EJECUTABLE (FUTURO)
+---------------------------------------------
+(Disponible después de empaquetar con PyInstaller)
+1. Descomprimir la carpeta Florens
+2. Ejecutar Florens.exe
+3. El sistema abrirá automáticamente en el navegador
+
+═══════════════════════════════════
+CREDENCIALES DE ACCESO
+═══════════════════════════════════
+
+PRIMER USO:
+El sistema creará automáticamente usuarios predeterminados.
+Para cambiar credenciales, acceder como Dueña y usar el panel de administración.
+
+Roles disponibles:
+- DUEÑA: Acceso completo (clínico + finanzas)
+- ODONTOLOGA: Solo funciones clínicas
+- ADMIN: Soporte técnico (sin acceso a datos clínicos)
+
+═══════════════════════════════════
+ESTRUCTURA DE CARPETAS
+═══════════════════════════════════
+
+Florens/
+├── Florens.exe (o run.py)  → Ejecutar este archivo
+├── app/                    → Código fuente (no modificar)
+├── config/                 → Configuración editable
+│   └── settings.ini        → Ajustes del sistema
+├── data/                   → Base de datos (AUTO-CREADA)
+│   ├── consultorio.db      → Datos del consultorio
+│   └── backups/            → Backups automáticos
+└── logs/                   → Registros técnicos (AUTO-CREADA)
+    ├── app.log
+    ├── security.log
+    ├── errors.log
+    └── whatsapp.log
+
+═══════════════════════════════════
+IMPORTANTE - PRIVACIDAD Y SEGURIDAD
+═══════════════════════════════════
+
+✓ Todos los datos se guardan LOCALMENTE en la carpeta 'data'
+✓ NO se envía información a ningún servidor externo
+✓ NO se comparte información con terceros
+✓ Los backups se crean automáticamente en data/backups/
+✓ No requiere conexión a internet (excepto WhatsApp, opcional)
+
+⚠️ RESPALDOS: Se recomienda hacer copias de la carpeta 'data' regularmente
+             y guardarlas en un disco externo o nube personal (Google Drive, etc.)
+
+═══════════════════════════════════
+CONFIGURACIÓN (AVANZADO)
+═══════════════════════════════════
+
+Editar config/settings.ini para ajustar:
+- Nivel de logs (DEBUG, INFO, WARNING, ERROR)
+- Intervalo de actualización automática de turnos
+- Cantidad de backups a mantener
+- Credenciales de WhatsApp Business API (opcional)
+
+═══════════════════════════════════
+FUNCIONALIDADES PRINCIPALES
+═══════════════════════════════════
+
+✓ Gestión de pacientes (alta, baja, modificación, búsqueda)
+✓ Agenda de turnos con confirmación automática por WhatsApp
+✓ Odontograma digital interactivo
+✓ Prestaciones con múltiples prácticas y obras sociales
+✓ Dashboard financiero (ingresos por fuente de pago)
+✓ Control de gastos por categoría
+✓ Reportes mensuales y anuales
+✓ Sistema de backups automáticos
+✓ Logs técnicos para soporte remoto
+
+═══════════════════════════════════
+INTEGRACIÓN WHATSAPP (OPCIONAL)
+═══════════════════════════════════
+
+Para habilitar confirmaciones automáticas de turnos por WhatsApp:
+1. Crear cuenta en Meta Business Suite
+2. Obtener credenciales (Phone Number ID, Access Token, Verify Token)
+3. Editar config/settings.ini con las credenciales
+4. Reiniciar el sistema
+
+Ver documentación completa en: docs/WHATSAPP_SETUP.md
+
+═══════════════════════════════════
+SOLUCIÓN DE PROBLEMAS
+═══════════════════════════════════
+
+❌ Error al iniciar:
+   - Verificar que no haya otro proceso usando el puerto 5000
+   - Revisar logs/errors.log para detalles
+
+❌ Base de datos corrupta:
+   - Restaurar desde backup más reciente (panel de Admin)
+   - Si no hay backups, contactar soporte
+
+❌ Problemas de rendimiento:
+   - Verificar espacio en disco (la BD crece con el uso)
+   - Limpiar logs antiguos manualmente si es necesario
+
+═══════════════════════════════════
+ACTUALIZAR EL SISTEMA
+═══════════════════════════════════
+
+IMPORTANTE: SIEMPRE hacer backup antes de actualizar
+
+Desde código fuente:
+1. Hacer backup manual de data/consultorio.db
+2. Actualizar código con git pull o descargando nueva versión
+3. Ejecutar python run.py
+4. El sistema aplicará migraciones automáticamente
+
+Desde ejecutable (futuro):
+1. El sistema creará backup automático antes de actualizar
+2. Seguir instrucciones del instalador de actualización
+
+═══════════════════════════════════
+SOPORTE TÉCNICO
+═══════════════════════════════════
+
+Desarrollador: Nicolás López
+Email: [configurar en producción]
+Teléfono: [configurar en producción]
+
+Para soporte remoto:
+- Enviar archivos de logs/ (NO contienen datos clínicos)
+- Describir el problema paso a paso
+- Indicar versión del sistema (visible en footer de la web)
+
+═══════════════════════════════════
+LICENCIA Y DERECHOS
+═══════════════════════════════════
+
+Florens es un sistema desarrollado a medida para uso privado.
+No distribuir sin autorización del autor.
+Código fuente: Propiedad de Nicolás López
+
+═══════════════════════════════════
+HISTORIAL DE VERSIONES
+═══════════════════════════════════
+
+v1.0.0 (Diciembre 2025)
+- Primera versión estable
+- Sistema completo de gestión clínica
+- Dashboard financiero avanzado
+- Integración WhatsApp
+- Sistema de backups automáticos
+- Logging seguro (sin datos clínicos)
+
+====================================

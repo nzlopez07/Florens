@@ -8,6 +8,7 @@ from functools import wraps
 import os
 import logging
 from datetime import datetime
+from app.config import PathManager
 from app.models import Usuario, Paciente, Turno, Prestacion
 from app.database import db
 from sqlalchemy import text
@@ -46,25 +47,25 @@ def dashboard():
         'prestaciones': Prestacion.query.count(),
     }
     
-    # Información de la base de datos
-    db_path = db.engine.url.database
+    # Información de la base de datos (usar PathManager para ruta correcta)
+    db_path = PathManager.get_db_path()
     db_info = {
-        'ruta': db_path,
-        'existe': os.path.exists(db_path) if db_path else False,
+        'ruta': str(db_path),
+        'existe': db_path.exists(),
         'tamano': None,
         'ultima_modificacion': None
     }
     
     if db_info['existe']:
-        db_info['tamano'] = os.path.getsize(db_path)
+        db_info['tamano'] = db_path.stat().st_size
         db_info['ultima_modificacion'] = datetime.fromtimestamp(
-            os.path.getmtime(db_path)
+            db_path.stat().st_mtime
         ).strftime('%Y-%m-%d %H:%M:%S')
     
-    # Leer últimas líneas del log
+    # Leer últimas líneas del log (usar PathManager)
     log_lines = []
-    log_file = 'logs/app.log'
-    if os.path.exists(log_file):
+    log_file = PathManager.get_logs_dir() / 'app.log'
+    if log_file.exists():
         try:
             with open(log_file, 'r', encoding='utf-8') as f:
                 log_lines = f.readlines()[-50:]  # Últimas 50 líneas
@@ -77,17 +78,17 @@ def dashboard():
     # Usuarios del sistema
     usuarios = Usuario.query.order_by(Usuario.ultimo_login.desc()).all()
     
-    # Información de backups
+    # Información de backups (usar PathManager)
     backups = []
-    backup_dir = 'instance/backups'
-    if os.path.exists(backup_dir):
-        for filename in sorted(os.listdir(backup_dir), reverse=True)[:10]:
-            filepath = os.path.join(backup_dir, filename)
+    backup_dir = PathManager.get_backups_dir()
+    if backup_dir.exists():
+        backup_files = sorted(backup_dir.glob('*.db'), key=lambda x: x.stat().st_mtime, reverse=True)[:10]
+        for filepath in backup_files:
             backups.append({
-                'nombre': filename,
-                'tamano': os.path.getsize(filepath),
+                'nombre': filepath.name,
+                'tamano': filepath.stat().st_size,
                 'fecha': datetime.fromtimestamp(
-                    os.path.getmtime(filepath)
+                    filepath.stat().st_mtime
                 ).strftime('%Y-%m-%d %H:%M:%S')
             })
     
@@ -136,14 +137,15 @@ def ver_logs():
     search_term = request.args.get('search', '')
     
     # Mapeo de tipos de log a archivos
+    logs_dir = PathManager.get_logs_dir()
     log_files = {
-        'app': 'logs/app.log',
-        'whatsapp': 'logs/whatsapp.log',
-        'security': 'logs/security.log',
-        'errors': 'logs/errors.log'
+        'app': logs_dir / 'app.log',
+        'whatsapp': logs_dir / 'whatsapp.log',
+        'security': logs_dir / 'security.log',
+        'errors': logs_dir / 'errors.log'
     }
     
-    log_file = log_files.get(log_type, 'logs/app.log')
+    log_file = log_files.get(log_type, logs_dir / 'app.log')
     log_lines = []
     file_info = {
         'existe': False,
@@ -151,11 +153,11 @@ def ver_logs():
         'ultima_modificacion': None
     }
     
-    if os.path.exists(log_file):
+    if log_file.exists():
         file_info['existe'] = True
-        file_info['tamano'] = os.path.getsize(log_file)
+        file_info['tamano'] = log_file.stat().st_size
         file_info['ultima_modificacion'] = datetime.fromtimestamp(
-            os.path.getmtime(log_file)
+            log_file.stat().st_mtime
         ).strftime('%Y-%m-%d %H:%M:%S')
         
         try:
@@ -200,22 +202,23 @@ def download_log(log_type):
     """Descargar archivo de log completo."""
     from flask import send_file
     
+    logs_dir = PathManager.get_logs_dir()
     log_files = {
-        'app': 'logs/app.log',
-        'whatsapp': 'logs/whatsapp.log',
-        'security': 'logs/security.log',
-        'errors': 'logs/errors.log'
+        'app': logs_dir / 'app.log',
+        'whatsapp': logs_dir / 'whatsapp.log',
+        'security': logs_dir / 'security.log',
+        'errors': logs_dir / 'errors.log'
     }
     
     log_file = log_files.get(log_type)
     
-    if not log_file or not os.path.exists(log_file):
+    if not log_file or not log_file.exists():
         abort(404)
     
     logger.info(f"Descargando log: {log_type} por usuario {current_user.username}")
     
     return send_file(
-        log_file,
+        str(log_file),
         as_attachment=True,
         download_name=f"{log_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
     )

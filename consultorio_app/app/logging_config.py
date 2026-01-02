@@ -12,6 +12,7 @@ import os
 import logging
 from logging.handlers import RotatingFileHandler
 import sys
+from app.config import PathManager, SettingsLoader
 
 
 class SanitizingFormatter(logging.Formatter):
@@ -48,6 +49,9 @@ def configure_logging(app):
     - logs/security.log - Eventos de seguridad (login, permisos)
     - logs/errors.log - Solo errores y excepciones
     
+    Usa PathManager para determinar ubicación dinámica de logs
+    (desarrollo vs PyInstaller).
+    
     Soporta:
     - Logs en consola (stdout)
     - Logs en archivo con rotación automática
@@ -58,16 +62,13 @@ def configure_logging(app):
         app: Instancia de Flask app
     """
     
-    # Determinar nivel de log desde variable de entorno
-    log_level_name = os.environ.get('LOG_LEVEL', 'INFO').upper()
+    # Determinar nivel de log desde configuración o variable de entorno
+    log_level_name = os.environ.get('LOG_LEVEL') or SettingsLoader.get('logging', 'level', 'INFO')
+    log_level_name = log_level_name.upper()
     log_level = getattr(logging, log_level_name, logging.INFO)
     
-    # Directorio de logs
-    log_dir = os.environ.get('LOG_DIR', 'logs')
-    
-    # Crear directorio de logs si no existe
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir, exist_ok=True)
+    # Usar PathManager para obtener directorio de logs dinámico
+    log_dir = PathManager.get_logs_dir()
     
     # Configurar logger root
     root_logger = logging.getLogger()
@@ -89,12 +90,16 @@ def configure_logging(app):
         console_handler.setFormatter(log_format)
         root_logger.addHandler(console_handler)
     
+    # Obtener configuración de tamaño de archivos
+    max_bytes = SettingsLoader.get_int('logging', 'max_file_size_mb', 10) * 1024 * 1024
+    backup_count = SettingsLoader.get_int('logging', 'backup_count', 10)
+    
     # === Handler principal (app.log) ===
     try:
         app_handler = RotatingFileHandler(
-            os.path.join(log_dir, 'app.log'),
-            maxBytes=10 * 1024 * 1024,  # 10 MB
-            backupCount=10,  # Mantener 10 archivos históricos
+            log_dir / 'app.log',
+            maxBytes=max_bytes,
+            backupCount=backup_count,
             encoding='utf-8'
         )
         app_handler.setLevel(log_level)
@@ -106,8 +111,8 @@ def configure_logging(app):
     # === Handler de errores (errors.log) ===
     try:
         error_handler = RotatingFileHandler(
-            os.path.join(log_dir, 'errors.log'),
-            maxBytes=10 * 1024 * 1024,
+            log_dir / 'errors.log',
+            maxBytes=max_bytes,
             backupCount=5,
             encoding='utf-8'
         )
@@ -124,8 +129,8 @@ def configure_logging(app):
     
     try:
         whatsapp_handler = RotatingFileHandler(
-            os.path.join(log_dir, 'whatsapp.log'),
-            maxBytes=5 * 1024 * 1024,
+            log_dir / 'whatsapp.log',
+            maxBytes=max_bytes,
             backupCount=3,
             encoding='utf-8'
         )
@@ -142,8 +147,8 @@ def configure_logging(app):
     
     try:
         security_handler = RotatingFileHandler(
-            os.path.join(log_dir, 'security.log'),
-            maxBytes=5 * 1024 * 1024,
+            log_dir / 'security.log',
+            maxBytes=max_bytes,
             backupCount=5,
             encoding='utf-8'
         )
@@ -168,8 +173,9 @@ def configure_logging(app):
     
     # Log de inicio del sistema
     root_logger.info("=" * 60)
-    root_logger.info(f"OdontoApp iniciando - LOG_LEVEL={log_level_name}")
-    root_logger.info(f"Directorio de logs: {os.path.abspath(log_dir)}")
+    root_logger.info(f"Florens iniciando - LOG_LEVEL={log_level_name}")
+    root_logger.info(f"Directorio de logs: {log_dir}")
+    root_logger.info(f"Modo: {'PyInstaller' if PathManager.is_frozen() else 'Desarrollo'}")
     root_logger.info("=" * 60)
 
 

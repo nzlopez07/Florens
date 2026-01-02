@@ -3,7 +3,7 @@ import json
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from flask import render_template, request, redirect, url_for, flash, jsonify, send_from_directory, current_app
-from flask_login import login_required
+from flask_login import login_required, current_user
 from app.models import Prestacion, ObraSocial, Localidad, Paciente
 from app.forms import PacienteForm
 from app.services.paciente import (
@@ -27,11 +27,22 @@ from . import main_bp
 
 
 @main_bp.route('/media/<path:filename>')
-@login_required
 def media_file(filename: str):
-  """Sirve archivos estáticos ubicados en app/media (imagen y hoja del odontograma)."""
-  media_dir = os.path.join(current_app.root_path, 'media')
-  return send_from_directory(media_dir, filename)
+    """Sirve archivos de app/media con validación simple.
+
+    Accesible sin login para íconos y assets públicos; protege traversal.
+    """
+    media_dir = os.path.join(current_app.root_path, 'media')
+    # Normalizar y evitar path traversal
+    safe_path = os.path.normpath(filename)
+    if safe_path.startswith('..'):
+        return "Invalid path", 400
+    # Opcionalmente restringir extensiones públicas si no está autenticado
+    _, ext = os.path.splitext(safe_path.lower())
+    public_exts = {'.png', '.ico', '.json'}
+    if not current_user.is_authenticated and ext not in public_exts:
+        return redirect(url_for('main.login'))
+    return send_from_directory(media_dir, safe_path)
 
 
 @main_bp.route('/odontograma/slots', methods=['POST'])

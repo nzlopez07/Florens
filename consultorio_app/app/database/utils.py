@@ -1,6 +1,7 @@
 import os
 import shutil
 from datetime import datetime
+from app.config import PathManager
 from app.database import db
 from app.database.session import DatabaseSession
 from flask import current_app
@@ -37,24 +38,25 @@ def get_session():
 
 def backup_database():
     """
-    Crea una copia de respaldo de la base de datos en instance/backups/
-    """
-    instance_path = os.path.join(current_app.root_path, '..', 'instance')
-    backup_path = os.path.join(instance_path, 'backups')
+    Crea una copia de respaldo de la base de datos en data/backups/
     
-    # Crear carpeta de backups si no existe
-    os.makedirs(backup_path, exist_ok=True)
+    Usa PathManager para determinar ubicación dinámica de backups.
+    
+    Returns:
+        str: Nombre del archivo de backup creado, o None si falla
+    """
+    backup_dir = PathManager.get_backups_dir()
     
     # Nombre del archivo de backup con timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_filename = f"consultorio_backup_{timestamp}.db"
+    backup_filename = f"consultorio_{timestamp}.db"
     
     # Rutas de origen y destino
-    source_db = os.path.join(instance_path, 'consultorio.db')
-    backup_db = os.path.join(backup_path, backup_filename)
+    source_db = PathManager.get_db_path()
+    backup_db = backup_dir / backup_filename
     
     # Crear el backup
-    if os.path.exists(source_db):
+    if source_db.exists():
         shutil.copy2(source_db, backup_db)
         print(f"💾 Backup creado: {backup_filename}")
         return backup_filename
@@ -63,14 +65,19 @@ def backup_database():
         return None
 
 def restore_database(backup_filename):
-    """
-    Restaura la base de datos desde un archivo de backup
-    """
-    instance_path = os.path.join(current_app.root_path, '..', 'instance')
-    backup_path = os.path.join(instance_path, 'backups', backup_filename)
-    target_db = os.path.join(instance_path, 'consultorio.db')
+    """.
     
-    if os.path.exists(backup_path):
+    Args:
+        backup_filename: Nombre del archivo de backup (sin path completo)
+        
+    Returns:
+        bool: True si la restauración fue exitosa, False en caso contrario
+    """
+    backup_dir = PathManager.get_backups_dir()
+    backup_path = backup_dir / backup_filename
+    target_db = PathManager.get_db_path()
+    
+    if backup_path.exists():
         shutil.copy2(backup_path, target_db)
         print(f"🔄 Base de datos restaurada desde: {backup_filename}")
         return True
@@ -78,14 +85,18 @@ def restore_database(backup_filename):
         print(f"⚠️ No se encontró el archivo de backup: {backup_filename}")
         return False
 
+
 def list_backups():
     """
-    Lista todos los archivos de backup disponibles
-    """
-    instance_path = os.path.join(current_app.root_path, '..', 'instance')
-    backup_path = os.path.join(instance_path, 'backups')
+    Lista todos los archivos de backup disponibles.
     
-    if os.path.exists(backup_path):
+    Returns:
+        list: Lista de nombres de archivos de backup, ordenados por más reciente primero
+    """
+    backup_dir = PathManager.get_backups_dir()
+    
+    if backup_dir.exists():
+        backups = [f.name for f in backup_dir.iterdir() if f.suffix == '.db'
         backups = [f for f in os.listdir(backup_path) if f.endswith('.db')]
         backups.sort(reverse=True)  # Más recientes primero
         return backups

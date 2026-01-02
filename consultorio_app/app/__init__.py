@@ -4,10 +4,28 @@ from flask_cors import CORS
 from flask_login import LoginManager
 from flasgger import Flasgger
 from flask_login import current_user
+from app.config import PathManager, SettingsLoader
 from app.database import db
 from app.database.config import configure_database
 from app.database.session import DatabaseSession
 from app.logging_config import configure_logging
+
+
+def get_version():
+    """
+    Lee la versión desde version.txt
+    
+    Returns:
+        str: Versión de la aplicación (ej: "1.0.0")
+    """
+    try:
+        version_file = PathManager.get_version_file()
+        if version_file.exists():
+            return version_file.read_text(encoding='utf-8').strip()
+    except Exception:
+        pass
+    return '1.0.0-dev'
+
 
 def create_app():
     app = Flask(__name__)
@@ -15,11 +33,26 @@ def create_app():
     # Configurar logging ANTES que nada
     configure_logging(app)
     
+    # Log de inicio
+    app.logger.info(f"Iniciando Florens v{get_version()}")
+    app.logger.info(f"Base dir: {PathManager.get_base_dir()}")
+    app.logger.info(f"Data dir: {PathManager.get_data_dir()}")
+    
     # Configurar CORS para permitir peticiones desde Swagger
     CORS(app, resources={r"/api/*": {"origins": "*"}})
     
-    # Configurar secret key para sesiones y CSRF
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+    # Configurar secret key desde settings.ini
+    secret_key = SettingsLoader.get('app', 'secret_key', 'dev-secret-key-change-in-production')
+    app.config['SECRET_KEY'] = secret_key
+    
+    # Configurar versión (disponible en templates)
+    app.config['VERSION'] = get_version()
+    # Configurar favicon desde settings.ini (archivo en app/media)
+    app.config['FAVICON'] = SettingsLoader.get('app', 'favicon', 'muela_icon.png')
+    # Aviso visual para usuarios (no cerrar mientras está abierto)
+    app.config['SHOW_RUNNER_NOTICE'] = SettingsLoader.get_bool(
+        'app', 'runner_notice', fallback=PathManager.is_frozen()
+    )
     
     # Configurar la base de datos
     configure_database(app)
@@ -99,6 +132,16 @@ def create_app():
         if value is None or value == '' or str(value).strip() == 'None':
             return default
         return value
+    
+    # Inyectar variables globales en todos los templates
+    @app.context_processor
+    def inject_globals():
+        return {
+            'version': app.config['VERSION'],
+            'favicon': app.config['FAVICON'],
+            'show_runner_notice': app.config['SHOW_RUNNER_NOTICE'],
+            'is_frozen': PathManager.is_frozen(),
+        }
     
     # Registrar blueprints (rutas)
     from app.routes import main_bp
