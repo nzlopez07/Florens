@@ -1,150 +1,186 @@
-# Sistema de Gestión de Consultorio Odontológico
+# Florens - Sistema de Gestión Odontológica
 
-## 📚 Documentación del Proyecto
+**Aplicación desktop local-first para consultorio dental**
 
-**Documentación completa disponible en `/docs`:**
-
-| Documento | Descripción | Estado |
-|-----------|-------------|--------|
-| [📋 Roadmap](docs/roadmap.md) | Plan de desarrollo en 8 fases | En progreso |
-| [📐 Decisiones Técnicas](docs/decisiones_tecnicas.md) | Arquitectura y decisiones clave | ✅ Completo |
-| [🔐 Seguridad](docs/seguridad.md) | Políticas de seguridad y privacidad | ✅ Completo |
-| [📖 Documentación Completa](docs/DOCUMENTACION_COMPLETA.md) | Guía exhaustiva del sistema | ✅ Completo |
-| [🎨 Análisis Frontend](docs/ANALISIS_MIGRACION_FRONTEND.md) | Evaluación de migración a frameworks modernos | ✅ Completo |
+**Versión actual:** 1.0.0  
+**Última actualización:** Enero 2026
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Inicio Rápido
 
+### Opción 1: Ejecutable (Recomendado - Sin Python)
+```
+1. Descargar Florens_v1.0.0.zip
+2. Descomprimir carpeta
+3. Ejecutar Florens.exe
+4. ¡Listo! El navegador se abre automáticamente
+```
+
+**Credenciales iniciales:**
+- Usuario: `admin` / Contraseña: `admin123` (rol ADMIN)
+- Usuario: `florencia` / Contraseña: `emma123` (rol DUEÑA)
+
+### Opción 2: Desde código fuente (Para desarrollo)
 ```bash
 # 1. Activar entorno virtual
 .venv\Scripts\activate
 
-# 2. Instalar dependencias (si no están)
+# 2. Instalar dependencias
 pip install -r requirements.txt
 
 # 3. Ejecutar servidor
 python run.py
 
-# 4. Acceder a la aplicación
+# 4. Acceder a
 # - Web: http://127.0.0.1:5000
 # - API Docs: http://127.0.0.1:5000/api/docs
 ```
 
 ---
 
-## 📁 Estructura del Proyecto
+## 📋 Características
+
+✅ Gestión completa de pacientes (CRUD + búsqueda)  
+✅ Agenda de turnos con confirmación por WhatsApp  
+✅ Odontograma digital interactivo  
+✅ Prestaciones y prácticas realizadas  
+✅ Dashboard financiero (ingresos/gastos)  
+✅ Sistema de backups automáticos  
+✅ Logs técnicos para auditoría  
+✅ Respeta privacidad: datos 100% locales  
+✅ Cierre automático al cerrar última pestaña  
+
+---
+
+## 📁 Estructura de carpetas (EXE)
+
+```
+Florens/
+├── Florens.exe          ← Ejecutable principal
+├── version.txt          ← Versión instalada
+├── LEEME.txt            ← Manual de usuario
+├── config/
+│   └── settings.ini     ← Configuración (logs, WhatsApp, etc.)
+├── data/                ← Base de datos (se crea automáticamente)
+│   ├── consultorio.db   ← Datos principales
+│   └── backups/         ← Copias de seguridad automáticas
+└── logs/                ← Registros técnicos (se crean automáticamente)
+    ├── app.log
+    ├── security.log
+    ├── errors.log
+    └── whatsapp.log
+```
+
+**Estructura de carpetas (Desarrollo):**
 
 ```
 consultorio_app/
-├── app/
-│   ├── __init__.py              # Configuración principal de Flask
-│   ├── database/                # Gestión de base de datos
-│   │   ├── __init__.py         # Instancia de SQLAlchemy
-│   │   ├── config.py           # Configuración de BD
-│   │   └── utils.py            # Utilidades y backups
-│   ├── models/                  # Modelos de datos
-│   │   ├── __init__.py         # Importación de todos los modelos
-│   │   ├── paciente.py         # Modelo Paciente
-│   │   ├── turno.py            # Modelo Turno
-│   │   ├── estado.py           # Modelo Estado
-│   │   ├── cambioEstado.py     # Modelo CambioEstado
-│   │   ├── localidad.py        # Modelo Localidad
-│   │   ├── obraSocial.py       # Modelo ObraSocial
-│   │   ├── prestacion.py       # Modelo Prestacion
-│   │   └── codigo.py           # Modelo Codigo
-│   ├── routes/                  # Rutas de la aplicación
-│   └── services/               # Lógica de negocio
-├── instance/                   # Datos específicos de la instancia
-│   ├── consultorio.db         # Base de datos SQLite
-│   └── backups/               # Respaldos automáticos
-├── database/                  # Configuración SQLAlchemy puro (legacy)
-├── run.py                     # Punto de entrada de la aplicación
-├── test_flask_db.py          # Pruebas de base de datos
-└── .gitignore                # Archivos excluidos del control de versiones
+├── app/                    # Código fuente
+│   ├── __init__.py        # Configuración Flask
+│   ├── models/            # Modelos de BD (Paciente, Turno, etc.)
+│   ├── routes/            # Rutas HTTP (index, pacientes, turnos, etc.)
+│   ├── services/          # Lógica de negocio
+│   ├── database/          # Config BD y utilidades
+│   ├── config/            # PathManager, SettingsLoader
+│   ├── utils/             # Helpers y utilidades generales
+│   └── media/             # Archivos estáticos (íconos, odontograma)
+├── config/                # settings.ini (configuración)
+├── data/                  # BD y backups (gitignored)
+├── logs/                  # Registros técnicos (gitignored)
+├── docs/                  # Documentación técnica
+├── run.py                 # Punto de entrada
+├── version.txt            # Versión
+└── Florens.spec          # Configuración PyInstaller
 ```
 
-## 🗄️ Carpeta Instance
+---
 
-La carpeta `instance/` es especial en Flask:
+## 🔐 Seguridad y Privacidad
 
-- **Propósito**: Almacena datos específicos de cada instalación
-- **Contenido**: Base de datos, archivos de configuración local, logs
-- **Control de versiones**: Excluida del repositorio (.gitignore)
-- **Backups**: Los respaldos se guardan en `instance/backups/`
+- ✅ **Todos los datos son locales:** No se envía información a servidores externos
+- ✅ **Sin cloud:** Base de datos SQLite en tu carpeta `data/`
+- ✅ **Contraseñas hasheadas:** Usando werkzeug.security
+- ✅ **Logs sanitizados:** No registra datos clínicos, solo eventos técnicos
+- ⚠️ **Respaldos recomendados:** Copia la carpeta `data/` regularmente a un USB o Google Drive
 
-### Funciones de respaldo disponibles:
+---
 
-```python
-from app.database.utils import backup_database, restore_database, list_backups
+## 🔄 Actualización del Sistema
 
-# Crear respaldo
-backup_database()
+**Antes de actualizar: Hacer backup (icono ⚙️ → Crear respaldo)**
 
-# Listar respaldos
-backups = list_backups()
+1. Descargar nueva versión ZIP
+2. Descomprimir en carpeta aparte (ej. `Florens_v1.1.0/`)
+3. Copiar `data/` de versión anterior a la nueva
+4. Copiar `config/settings.ini` (conserva tu configuración)
+5. Ejecutar nuevo `Florens.exe`
+6. El sistema aplicará migraciones automáticamente
 
-# Restaurar desde respaldo
-restore_database('consultorio_backup_20250721_120000.db')
-```
+**Rollback:** Si algo falla, ejecutar la versión anterior.
 
-## 🚀 Scripts de Inicialización
+---
 
-### 🔧 `init_system.py` - Inicialización Completa
-Script principal para configurar el sistema desde cero:
-- Crea y configura la base de datos
-- Puebla con datos maestros (estados, localidades, obras sociales, códigos)
-- Crea pacientes, turnos y prestaciones de ejemplo
-- Prueba todas las relaciones entre modelos
-- Verifica el sistema de respaldos
-- Genera reporte estadístico completo
+## 📚 Documentación
 
+| Documento | Descripción |
+|-----------|-------------|
+| [LEEME.txt](LEEME.txt) | Manual de usuario (español) |
+| [docs/decisiones_tecnicas.md](docs/decisiones_tecnicas.md) | Arquitectura del sistema |
+| [docs/seguridad.md](docs/seguridad.md) | Políticas de seguridad |
+| [docs/roadmap.md](docs/roadmap.md) | Plan de desarrollo futuro |
+| [docs/WHATSAPP_SETUP.md](docs/WHATSAPP_SETUP.md) | Integración WhatsApp |
+
+---
+
+## 🛠 Desarrollo
+
+### Instalar en entorno de desarrollo
 ```bash
-python init_system.py
+pip install -r requirements.txt
 ```
 
-### ⚡ `quick_start.py` - Verificación Rápida
-Script para uso diario que verifica el estado del sistema:
-- Comprueba la conectividad de la base de datos
-- Muestra estadísticas básicas
-- Crea backup automático
-- Confirma que todo funciona correctamente
-
+### Empaquetar como EXE (PyInstaller)
 ```bash
-python quick_start.py
+pyinstaller --clean Florens.spec
 ```
 
-### 🧪 `test_flask_db.py` - Pruebas de Base de Datos
-Script de pruebas específicas para validar modelos y relaciones:
+El resultado estará en `dist/Florens/`
 
+### Ejecutar tests
 ```bash
-python test_flask_db.py
+pytest tests/
 ```
 
-### 💾 `test_backup.py` - Pruebas de Respaldo
-Script para probar el sistema de respaldos:
+---
 
-```bash
-python test_backup.py
-```
+## 📦 Distribución
 
-## 🚀 Uso
+**Entrega de una nueva versión:**
 
-```bash
-# Ejecutar la aplicación
-python run.py
+1. Incrementar `version.txt`
+2. Build limpio: `pyinstaller --clean Florens.spec`
+3. Empaquetar: comprimir `dist/Florens/` como `Florens_vX.Y.Z.zip`
+4. Publicar: incluir `LEEME.txt`, checksum SHA256, e instrucciones de actualización
 
-# Ejecutar pruebas
-python test_flask_db.py
-```
+---
 
-## 📊 Modelos de Datos
+## 🤝 Contribuciones
 
-- **Paciente**: Información personal y de contacto
-- **Turno**: Citas programadas
-- **Estado**: Estados de los turnos (Pendiente, Confirmado, etc.)
-- **CambioEstado**: Historial de cambios de estado
-- **Prestacion**: Tratamientos realizados
-- **Codigo**: Códigos de prestaciones
-- **Localidad**: Ubicaciones geográficas
-- **ObraSocial**: Obras sociales
+Desarrollado para **Dra. Florencia López** - Odontología General.  
+Equipo: Nicolás López (desarrollo)
+
+---
+
+## 📝 Licencia
+
+Privado. Uso exclusivo para consultorio dental.
+
+---
+
+## 🆘 Soporte
+
+Para problemas técnicos:
+- Revisar `logs/errors.log` en carpeta Florens
+- Hacer backup y restaurar desde punto anterior si es necesario
+- Contactar con soporte técnico

@@ -10,6 +10,5 @@ from . import turnos  # noqa: E402,F401
 from . import prestaciones  # noqa: E402,F401
 from . import practicas  # noqa: E402,F401
 from . import api  # noqa: E402,F401
-from . import events  # noqa: E402,F401
 
 __all__ = ['main_bp']

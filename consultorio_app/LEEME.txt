@@ -26,43 +26,63 @@ Pasos:
    python run.py
 5. El navegador abrirá automáticamente en http://127.0.0.1:5000
 
-OPCIÓN 2: EJECUTAR DESDE EJECUTABLE (FUTURO)
----------------------------------------------
-(Disponible después de empaquetar con PyInstaller)
-1. Descomprimir la carpeta Florens
-2. Ejecutar Florens.exe
-3. El sistema abrirá automáticamente en el navegador
+OPCIÓN 2: EJECUTAR DESDE EJECUTABLE (RECOMENDADO)
+--------------------------------------------------
+1. Descomprimir la carpeta Florens descargada
+2. Ejecutar Florens.exe (o Florens2.exe / Florens_vX.Y.exe según versión)
+3. El navegador abrirá automáticamente en http://127.0.0.1:5000
+4. La app se cerrará automáticamente al cerrar la última pestaña del navegador
 
 ═══════════════════════════════════
 CREDENCIALES DE ACCESO
 ═══════════════════════════════════
 
-PRIMER USO:
-El sistema creará automáticamente usuarios predeterminados.
-Para cambiar credenciales, acceder como Dueña y usar el panel de administración.
+CUENTAS INICIALES (automáticas al primer arranque):
+
+┌─────────────────────────────────────┐
+│ Usuario: admin                      │
+│ Contraseña: admin123                │
+│ Rol: ADMIN (técnico/soporte)        │
+└─────────────────────────────────────┘
+
+┌─────────────────────────────────────┐
+│ Usuario: florencia                  │
+│ Contraseña: emma123                 │
+│ Rol: DUEÑA (acceso completo)        │
+└─────────────────────────────────────┘
+
+⚠️ IMPORTANTE:
+- Cambia estas contraseñas en el primer acceso (Admin → Usuarios)
+- Usa contraseñas seguras con mayúsculas, números y caracteres especiales
+- Solo la Dueña puede modificar otros usuarios y configuración
 
 Roles disponibles:
 - DUEÑA: Acceso completo (clínico + finanzas)
 - ODONTOLOGA: Solo funciones clínicas
-- ADMIN: Soporte técnico (sin acceso a datos clínicos)
+- ADMIN: Panel técnico (logs, BD, backups)
 
 ═══════════════════════════════════
 ESTRUCTURA DE CARPETAS
 ═══════════════════════════════════
 
 Florens/
-├── Florens.exe (o run.py)  → Ejecutar este archivo
-├── app/                    → Código fuente (no modificar)
-├── config/                 → Configuración editable
-│   └── settings.ini        → Ajustes del sistema
-├── data/                   → Base de datos (AUTO-CREADA)
-│   ├── consultorio.db      → Datos del consultorio
-│   └── backups/            → Backups automáticos
-└── logs/                   → Registros técnicos (AUTO-CREADA)
-    ├── app.log
-    ├── security.log
-    ├── errors.log
-    └── whatsapp.log
+├── Florens.exe             → ⭐ EJECUTAR ESTE ARCHIVO
+├── LEEME.txt               → Este archivo
+├── version.txt             → Versión del sistema
+├── config/
+│   └── settings.ini        → Configuración editable (logs, WhatsApp, backups)
+├── data/                   → Base de datos y respaldos (SE CREA AUTOMÁTICAMENTE)
+│   ├── consultorio.db      → Base de datos principal (los datos están aquí)
+│   └── backups/            → Copias automáticas de seguridad
+│       ├── backup_YYYYMMDD_HHMM.db
+│       └── ...
+└── logs/                   → Registros técnicos (SE CREA AUTOMÁTICAMENTE)
+    ├── app.log             → Eventos del sistema
+    ├── security.log        → Logins y accesos
+    ├── errors.log          → Errores técnicos
+    └── whatsapp.log        → Integración WhatsApp
+
+💾 IMPORTANTE: La carpeta 'data/' contiene tu base de datos. Realiza copias de seguridad regulares.
 
 ═══════════════════════════════════
 IMPORTANTE - PRIVACIDAD Y SEGURIDAD
@@ -133,17 +153,21 @@ SOLUCIÓN DE PROBLEMAS
 ACTUALIZAR EL SISTEMA
 ═══════════════════════════════════
 
-IMPORTANTE: SIEMPRE hacer backup antes de actualizar
+⚠️ IMPORTANTE: SIEMPRE hacer respaldo antes de actualizar
 
-Desde código fuente:
-1. Hacer backup manual de data/consultorio.db
-2. Actualizar código con git pull o descargando nueva versión
-3. Ejecutar python run.py
-4. El sistema aplicará migraciones automáticamente
+PASOS DE ACTUALIZACIÓN (ejecutable):
+1. Abrir Admin panel en Florens (icono ⚙️)
+2. Hacer un backup manual (botón "Crear respaldo")
+3. Descargar e instalar la nueva versión en una carpeta aparte
+4. Copiar la carpeta 'data/' de la versión anterior a la nueva
+5. Copiar 'config/settings.ini' (tu configuración se mantiene)
+6. Ejecutar el nuevo Florens.exe
+7. El sistema aplicará migraciones automáticamente
 
-Desde ejecutable (futuro):
-1. El sistema creará backup automático antes de actualizar
-2. Seguir instrucciones del instalador de actualización
+ROLLBACK (si algo falla):
+1. Vuelve a ejecutar la versión anterior
+2. El sistema detectará la versión de BD anterior y funcionará correctamente
+3. No hay datos perdidos (todos están en data/consultorio.db)
 
 ═══════════════════════════════════
 SOPORTE TÉCNICO

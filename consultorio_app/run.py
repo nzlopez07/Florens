@@ -73,7 +73,7 @@ def ensure_default_users():
             'nombre': 'Florencia',
             'apellido': 'Lopez',
             'rol': 'DUEÑA',
-            'password': 'emma123',
+            'password': 'flor123',
         },
     ]
 

@@ -72,6 +72,47 @@ def logout():
     return redirect(url_for('main.login'))
 
 
+@main_bp.route('/shutdown', methods=['POST'])
+@login_required
+def shutdown():
+    """Cierra la sesión y apaga la aplicación con backup automático."""
+    username = current_user.username if current_user.is_authenticated else 'unknown'
+    
+    # Log de shutdown
+    log_security_event(
+        event='shutdown',
+        username=username,
+        user_id=current_user.id if current_user.is_authenticated else None,
+        success=True,
+        ip_address=request.remote_addr
+    )
+    
+    logout_user()
+    
+    # Crear backup antes de apagar
+    try:
+        from app.database.utils import backup_database
+        print("[SHUTDOWN] Creando backup final...")
+        backup_database()
+    except Exception as e:
+        print(f"[SHUTDOWN] Error al crear backup: {e}")
+    
+    # Programar el cierre del proceso en 1 segundo (después de responder al cliente)
+    import os
+    import threading
+    def close_app():
+        import time
+        time.sleep(1)
+        print("[EXIT] Cerrando aplicación por solicitud del usuario.")
+        os._exit(0)
+    
+    closer = threading.Thread(target=close_app, daemon=True)
+    closer.start()
+    
+    flash('Aplicación cerrando...', 'info')
+    return redirect(url_for('main.login'))
+
+
 @main_bp.route('/')
 @login_required
 def index():

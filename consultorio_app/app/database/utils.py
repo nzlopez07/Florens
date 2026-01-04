@@ -96,7 +96,7 @@ def list_backups():
     backup_dir = PathManager.get_backups_dir()
     
     if backup_dir.exists():
-        backups = [f.name for f in backup_dir.iterdir() if f.suffix == '.db'
+        backups = [f.name for f in backup_dir.iterdir() if f.suffix == '.db']
         backups = [f for f in os.listdir(backup_path) if f.endswith('.db')]
         backups.sort(reverse=True)  # Más recientes primero
         return backups

@@ -11,6 +11,7 @@ from datetime import datetime
 from app.config import PathManager
 from app.models import Usuario, Paciente, Turno, Prestacion
 from app.database import db
+from app.database.utils import backup_database
 from sqlalchemy import text
 from app.services.testing.run_tests_service import RunTestsService
 
@@ -115,6 +116,25 @@ def run_tests():
     # Permitir consumo HTMX/JS o redirigir al dashboard
     if request.headers.get('Accept') == 'application/json':
         return jsonify({"status": "started"})
+    return redirect(url_for('admin.dashboard'))
+
+
+@admin_bp.route('/backup', methods=['POST'])
+@login_required
+@admin_required
+def crear_backup():
+    """Crea un backup manual de la base de datos."""
+    try:
+        filename = backup_database()
+        if filename:
+            flash(f'✅ Backup creado: {filename}', 'success')
+        else:
+            flash('⚠️ Error al crear backup', 'error')
+    except Exception as e:
+        flash(f'❌ Error: {str(e)}', 'error')
+    
+    if request.headers.get('Accept') == 'application/json':
+        return jsonify({"status": "created", "filename": filename})
     return redirect(url_for('admin.dashboard'))
 
 

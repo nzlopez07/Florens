@@ -269,6 +269,7 @@
                             <li><span class="dropdown-item-text"><small>Rol: {{ current_user.rol }}</small></span></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{{ url_for('main.logout') }}"><i class="bi bi-box-arrow-right"></i> Cerrar Sesión</a></li>
+                            <li><button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#shutdownModal"><i class="bi bi-power"></i> Salir del Programa</button></li>
                         </ul>
                     </li>
                 </ul>
@@ -276,6 +277,34 @@
             </div>
         </div>
     </nav>
+
+    <!-- Modal de confirmación para Salir del Programa -->
+    {% if current_user.is_authenticated %}
+    <div class="modal fade" id="shutdownModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="bi bi-exclamation-triangle"></i> Salir del Programa</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>¿Está segura de que desea cerrar la aplicación?</p>
+                    <ul class="text-muted small">
+                        <li>Se creará un respaldo automático de la base de datos</li>
+                        <li>Se cerrará la sesión actual</li>
+                        <li>La aplicación se apagará completamente</li>
+                    </ul>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <form action="{{ url_for('main.shutdown') }}" method="post" style="display: inline;">
+                        <button type="submit" class="btn btn-danger">Salir Ahora</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Contenido principal -->
     <div class="container mt-4">
@@ -325,23 +354,7 @@
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     
-        <script>
-            // Establish a persistent SSE connection to track active tabs
-            (function(){
-                try {
-                    var es = new EventSource('/events');
-                    // Optional: log errors silently
-                    es.onerror = function(){ /* ignore */ };
-                    // On tab close, send an explicit bye to decrement count promptly
-                    window.addEventListener('beforeunload', function(){
-                        try {
-                            navigator.sendBeacon('/events/bye');
-                        } catch(e) { /* ignore */ }
-                    });
-                } catch(e) { /* ignore */ }
-            })();
-        </script>
-        {% block scripts %}{% endblock %}
+    {% block scripts %}{% endblock %}
     
 </body>
 </html>

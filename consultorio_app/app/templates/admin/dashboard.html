@@ -94,8 +94,13 @@
     <!-- Backups -->
     <div class="col-md-6">
         <div class="card">
-            <div class="card-header bg-success text-white">
-                <i class="bi bi-cloud-arrow-down"></i> Backups Recientes
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-cloud-arrow-down"></i> Backups Recientes</span>
+                <form action="{{ url_for('admin.crear_backup') }}" method="post" class="d-inline mb-0">
+                    <button type="submit" class="btn btn-sm btn-light" title="Crear respaldo manual ahora">
+                        <i class="bi bi-plus-circle"></i> Nuevo
+                    </button>
+                </form>
             </div>
             <div class="card-body" style="max-height: 300px; overflow-y: auto;">
                 {% if backups %}
