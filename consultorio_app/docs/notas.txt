@@ -1,0 +1,14 @@
+Movimiento de dinero (IPSS):
+-Viene paciente
+-Hace consulta + tratamientos posibles
+-Se hace autorización
+-Tiene que haber diferencia entre fecha autorización ficha y fecha prestación
+-Otro día se hace la práctica (la atención)
+--Se paga plus + plus afiliado
+
+Si la consulta saliera: 30k
+y el importe afiliado fuera: 5k
+Flopi cobraría: 30k - 5k + (plus de prácticas)
+
+*Consulta y Limpieza en IPSS son cada 12 meses (locked por negocio)
+*

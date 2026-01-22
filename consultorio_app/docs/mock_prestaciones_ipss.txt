@@ -1,0 +1,427 @@
+================================================================================
+MOCK VISUAL - ESTRUCTURA DE PRESTACIONES IPSS CON ESTADOS
+================================================================================
+Fecha: 21/01/2026
+Propósito: Diseño de modelo de datos para prestaciones IPSS con autorización,
+           realización en dos momentos, baja lógica y múltiples cobros
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 1. TABLA: Prestacion (cabecera)                                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Campo                            Tipo        Nullable  Default      Descripción
+───────────────────────────────────────────────────────────────────────────────
+id                               Integer     NO        AUTO         PK
+paciente_id                      Integer     NO        -            FK -> Paciente
+descripcion                      String      NO        -            Ej: "Consulta + Limpieza IPSS"
+monto                            Float       NO        0.0          Monto total calculado (legacy, mantener para compatibilidad)
+fecha                            DateTime    NO        NOW()        Fecha de creación/solicitud
+observaciones                    String      YES       NULL         Observaciones generales
+
+--- NUEVOS CAMPOS IPSS ---
+estado                           String(20)  NO        'borrador'   Enum: borrador | autorizada | realizada | liquidada
+fecha_solicitud                  Date        NO        TODAY        Día que se crea (normalmente el día de consulta)
+fecha_autorizacion               Date        YES       NULL         Cuándo llegó la ficha autorizada de OS
+fecha_realizacion                Date        YES       NULL         Cuándo se atendió efectivamente al paciente
+importe_afiliado_autorizado      Float       YES       NULL         Lo que debe pagar el paciente (según OS)
+importe_coseguro_autorizado      Float       YES       NULL         Coseguro si aplica
+importe_profesional_autorizado   Float       YES       NULL         Honorarios brutos autorizados por OS (sin descontar plus afiliado)
+autorizacion_adjunta_path        String      YES       NULL         Ruta al archivo (foto/PDF de ficha autorizada)
+observaciones_autorizacion       String      YES       NULL         Notas sobre la autorización
+
+
+CONSTRAINTS:
+- fecha_realizacion >= fecha_autorizacion (si ambas existen)
+- No permitir estado 'realizada' sin fecha_autorizacion
+- No permitir estado 'liquidada' sin fecha_realizacion
+
+
+INDICES SUGERIDOS:
+- idx_prestacion_paciente (paciente_id)
+- idx_prestacion_estado (estado)
+- idx_prestacion_fecha_realizacion (fecha_realizacion) -- para regla 12 meses IPSS
+
+
+════════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 2. TABLA: PrestacionPractica (detalle de ítems)                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Campo                   Tipo        Nullable  Default      Descripción
+───────────────────────────────────────────────────────────────────────────────
+id                      Integer     NO        AUTO         PK
+prestacion_id           Integer     NO        -            FK -> Prestacion
+practica_id             Integer     NO        -            FK -> Practica
+cantidad                Integer     NO        1            NUEVO USO: permite "2 extracciones", "3 restauraciones", etc.
+monto_unitario          Float       YES       NULL         Copia de practica.monto_unitario al momento de creación
+observaciones           String      YES       NULL         Observaciones del ítem
+
+--- NUEVOS CAMPOS IPSS ---
+tipo_concepto           String(20)  NO        'acto'       Enum: acto | plus_doctora | plus_afiliado | honorario_os
+estado_item             String(20)  NO        'pendiente'  Enum: pendiente | autorizado | realizado | anulado
+monto_autorizado        Float       YES       NULL         Monto autorizado por OS para este ítem
+monto_cobrado           Float       YES       NULL         Monto efectivamente cobrado (legacy, se mueve a PrestacionCobro)
+fecha_realizacion_item  Date        YES       NULL         Cuándo se realizó este ítem específico
+fecha_anulacion         Date        YES       NULL         Cuándo se anuló (si aplica)
+razon_anulacion         String      YES       NULL         Por qué se anuló
+
+
+CONSTRAINTS:
+- cantidad >= 1
+- Si estado_item = 'anulado', debe tener fecha_anulacion
+
+
+INDICES SUGERIDOS:
+- idx_pp_prestacion (prestacion_id)
+- idx_pp_practica (practica_id)
+- idx_pp_estado_item (estado_item)
+
+
+════════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 3. TABLA: PrestacionCobro (nueva - historial de cobros)                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Campo              Tipo        Nullable  Default      Descripción
+───────────────────────────────────────────────────────────────────────────────
+id                 Integer     NO        AUTO         PK
+prestacion_id      Integer     NO        -            FK -> Prestacion
+fecha_cobro        Date        NO        TODAY        Cuándo se registró el cobro
+tipo_cobro         String(30)  NO        -            Enum: plus_consulta | plus_practica | plus_afiliado | honorario_os | otro
+monto              Float       NO        0.0          Monto cobrado
+razon              String      YES       NULL         Descripción opcional (ej: "Plus consulta día 1", "Plus extracción día 15")
+usuario_id         Integer     YES       NULL         FK -> Usuario (quién registró)
+created_at         DateTime    NO        NOW()        Timestamp de creación
+
+
+CONSTRAINTS:
+- monto >= 0
+
+
+INDICES SUGERIDOS:
+- idx_cobro_prestacion (prestacion_id)
+- idx_cobro_fecha (fecha_cobro)
+- idx_cobro_tipo (tipo_cobro)
+
+
+QUERIES TÍPICAS:
+- Total plus doctora de una prestación:
+  SELECT SUM(monto) FROM PrestacionCobro 
+  WHERE prestacion_id = X AND tipo_cobro IN ('plus_consulta', 'plus_practica')
+
+- Total plus afiliado cobrado en un periodo:
+  SELECT SUM(monto) FROM PrestacionCobro 
+  WHERE tipo_cobro = 'plus_afiliado' AND fecha_cobro BETWEEN fecha1 AND fecha2
+
+
+════════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 4. TABLA: PrestacionAudit (opcional - auditoría de cambios)                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Campo              Tipo        Nullable  Default      Descripción
+───────────────────────────────────────────────────────────────────────────────
+id                 Integer     NO        AUTO         PK
+prestacion_id      Integer     NO        -            FK -> Prestacion
+campo              String(50)  NO        -            Nombre del campo modificado
+valor_anterior     String      YES       NULL         Valor antes del cambio (serializado como texto)
+valor_nuevo        String      YES       NULL         Valor después del cambio
+fecha_cambio       DateTime    NO        NOW()        Timestamp del cambio
+razon              String      YES       NULL         Justificación del cambio
+usuario_id         Integer     YES       NULL         FK -> Usuario (quién hizo el cambio)
+
+
+CASOS DE USO:
+- Registrar cuando se ajusta "importe_afiliado_autorizado" post-autorización
+- Registrar anulación de ítems
+- Tracking de cambios en estados
+
+
+════════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 5. TABLA: Practica (modificada - baja lógica)                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Campo               Tipo        Nullable  Default      Descripción
+───────────────────────────────────────────────────────────────────────────────
+id                  Integer     NO        AUTO         PK
+codigo              String(30)  NO        -            Código de nomenclador (ej: "01.03", "05.02")
+descripcion         String(200) NO        -            Descripción de la práctica
+proveedor_tipo      String(20)  NO        -            PARTICULAR | OBRA_SOCIAL
+obra_social_id      Integer     YES       NULL         FK -> ObraSocial (solo si proveedor_tipo = OBRA_SOCIAL)
+monto_unitario      Float       NO        0.0          Precio base
+
+--- NUEVOS CAMPOS BAJA LÓGICA ---
+activa              Boolean     NO        TRUE         FALSE = práctica dada de baja (no se puede usar en nuevas prestaciones)
+fecha_baja          Date        YES       NULL         Cuándo se dio de baja
+razon_baja          String      YES       NULL         Por qué se dio de baja
+
+
+CONSTRAINTS:
+- Si activa = FALSE, debe tener fecha_baja
+
+
+INDICES SUGERIDOS:
+- idx_practica_activa (activa)
+- idx_practica_codigo_os (codigo, obra_social_id) -- para búsquedas rápidas
+
+
+QUERIES:
+- Listar prácticas disponibles para nueva prestación:
+  SELECT * FROM Practica WHERE activa = TRUE
+
+- Mostrar todas (incluyendo inactivas) para auditoría:
+  SELECT * FROM Practica
+
+
+════════════════════════════════════════════════════════════════════════════════
+════════════════════════════════════════════════════════════════════════════════
+
+EJEMPLO CONCRETO: Prestación IPSS con 2 Extracciones + Consulta + Limpieza
+════════════════════════════════════════════════════════════════════════════════
+
+--- PACIENTE ---
+Nombre: Janet Judith Guaimas
+DNI: 12345678
+Obra Social: IPSS (id=1)
+
+
+--- PRÁCTICA EN CATÁLOGO ---
+┌────┬────────┬─────────────────────┬──────────────┬─────────┬────────┐
+│ id │ codigo │ descripcion         │ monto_unit.  │ activa  │ OS     │
+├────┼────────┼─────────────────────┼──────────────┼─────────┼────────┤
+│ 10 │ 01.03  │ Consulta            │   5000.00    │ TRUE    │ IPSS   │
+│ 11 │ 05.02  │ Limpieza            │  10000.00    │ TRUE    │ IPSS   │
+│ 12 │ 02.10  │ Extracción simple   │  15000.00    │ TRUE    │ IPSS   │
+│ 13 │ PLUS01 │ Plus Consulta Dr.   │  25000.00    │ TRUE    │ IPSS   │
+│ 14 │ PLUS02 │ Plus Extracción Dr. │  20000.00    │ TRUE    │ IPSS   │
+│ 15 │ PLUS03 │ Plus Limpieza Dr.   │  10000.00    │ TRUE    │ IPSS   │
+└────┴────────┴─────────────────────┴──────────────┴─────────┴────────┘
+
+
+════════════════════════════════════════════════════════════════════════════════
+TIMELINE DE LA PRESTACIÓN
+════════════════════════════════════════════════════════════════════════════════
+
+📅 21/01/2026 (DÍA 1 - CONSULTA)
+──────────────────────────────────────────────────────────────────────────────
+
+1. Paciente llega a consultorio
+2. Doctora hace consulta, detecta necesidad de 2 extracciones + limpieza
+3. Cobra SOLO el plus de la consulta ($25,000)
+4. Crea prestación en el sistema:
+
+
+--- TABLA: Prestacion ---
+id: 100
+paciente_id: 5 (Janet Judith Guaimas)
+descripcion: "Consulta + 2 Extracciones + Limpieza IPSS"
+monto: 95000.00  (cálculo: 5000+2*15000+10000+25000+2*20000+10000 = subtotal prácticas)
+fecha: 2026-01-21 14:30:00
+estado: 'borrador'
+fecha_solicitud: 2026-01-21
+fecha_autorizacion: NULL
+fecha_realizacion: NULL
+importe_afiliado_autorizado: NULL
+importe_coseguro_autorizado: NULL
+importe_profesional_autorizado: NULL
+
+
+--- TABLA: PrestacionPractica ---
+┌────┬──────────────┬──────────┬──────────┬────────────┬───────────────┬──────────────┬──────────────┐
+│ id │ prestacion_id│ practica │ cantidad │ tipo_conc. │ estado_item   │ monto_autor. │ monto_cobr.  │
+├────┼──────────────┼──────────┼──────────┼────────────┼───────────────┼──────────────┼──────────────┤
+│ 1  │ 100          │ 10       │ 1        │ acto       │ pendiente     │ NULL         │ NULL         │  <-- Consulta (01.03)
+│ 2  │ 100          │ 11       │ 1        │ acto       │ pendiente     │ NULL         │ NULL         │  <-- Limpieza (05.02)
+│ 3  │ 100          │ 12       │ 2        │ acto       │ pendiente     │ NULL         │ NULL         │  <-- 2 Extracciones (02.10) ✨
+│ 4  │ 100          │ 13       │ 1        │ plus_doc.  │ pendiente     │ NULL         │ NULL         │  <-- Plus consulta
+│ 5  │ 100          │ 14       │ 2        │ plus_doc.  │ pendiente     │ NULL         │ NULL         │  <-- Plus 2 extracciones
+│ 6  │ 100          │ 15       │ 1        │ plus_doc.  │ pendiente     │ NULL         │ NULL         │  <-- Plus limpieza
+└────┴──────────────┴──────────┴──────────┴────────────┴───────────────┴──────────────┴──────────────┘
+
+
+--- TABLA: PrestacionCobro ---
+┌────┬──────────────┬──────────────┬─────────────────┬──────────┬──────────────────────────────┐
+│ id │ prestacion_id│ fecha_cobro  │ tipo_cobro      │ monto    │ razon                        │
+├────┼──────────────┼──────────────┼─────────────────┼──────────┼──────────────────────────────┤
+│ 1  │ 100          │ 2026-01-21   │ plus_consulta   │ 25000.00 │ "Cobro del día de consulta"  │
+└────┴──────────────┴──────────────┴─────────────────┴──────────┴──────────────────────────────┘
+
+
+5. Doctora envía ficha (por otro sistema) a IPSS para autorización
+
+
+════════════════════════════════════════════════════════════════════════════════
+
+📅 22/01/2026 (DÍA 2 - LLEGA AUTORIZACIÓN)
+──────────────────────────────────────────────────────────────────────────────
+
+1. IPSS envía foto de ficha con desglose:
+   - Importe Profesional: $40,000 (honorarios brutos de la OS)
+   - Importe Afiliado: $13,071.28 (lo que debe pagar el paciente adicionalmente)
+   - Importe Coseguro: $0 (no aplica en este caso)
+
+2. Doctora registra la autorización en el sistema:
+
+
+--- TABLA: Prestacion (ACTUALIZADA) ---
+id: 100
+estado: 'autorizada'  ⬅️ CAMBIO
+fecha_autorizacion: 2026-01-22  ⬅️ NUEVO
+importe_afiliado_autorizado: 13071.28  ⬅️ NUEVO
+importe_coseguro_autorizado: 0.00  ⬅️ NUEVO
+importe_profesional_autorizado: 40000.00  ⬅️ NUEVO
+autorizacion_adjunta_path: '/uploads/prestaciones/100_autorizacion.jpg'  ⬅️ NUEVO
+observaciones_autorizacion: 'Autorizado OK por IPSS'
+
+
+--- TABLA: PrestacionPractica (ACTUALIZADA) ---
+Todos los ítems cambian estado_item de 'pendiente' a 'autorizado'
+
+
+--- TABLA: PrestacionAudit (registro del cambio) ---
+┌────┬──────────────┬────────────────────────────┬──────────────┬──────────────┬───────────────────┐
+│ id │ prestacion_id│ campo                      │ valor_ant.   │ valor_nuevo  │ fecha_cambio      │
+├────┼──────────────┼────────────────────────────┼──────────────┼──────────────┼───────────────────┤
+│ 1  │ 100          │ estado                     │ 'borrador'   │ 'autorizada' │ 2026-01-22 09:15  │
+│ 2  │ 100          │ importe_profesional_autor. │ NULL         │ '40000.00'   │ 2026-01-22 09:15  │
+│ 3  │ 100          │ importe_afiliado_autor.    │ NULL         │ '13071.28'   │ 2026-01-22 09:15  │
+└────┴──────────────┴────────────────────────────┴──────────────┴──────────────┴───────────────────┘
+
+
+════════════════════════════════════════════════════════════════════════════════
+
+📅 05/02/2026 (DÍA 15 - REALIZACIÓN DE PRÁCTICAS)
+──────────────────────────────────────────────────────────────────────────────
+
+1. Paciente vuelve para las 2 extracciones y limpieza
+2. Doctora realiza las prácticas
+3. Cobra:
+   - Plus de 2 extracciones: $40,000 (2 × $20,000)
+   - Plus de limpieza: $10,000
+   - Plus afiliado: $13,071.28 (el paciente paga esta diferencia)
+
+4. Registra la realización:
+
+
+--- TABLA: Prestacion (ACTUALIZADA) ---
+id: 100
+estado: 'realizada'  ⬅️ CAMBIO
+fecha_realizacion: 2026-02-05  ⬅️ NUEVO
+
+
+--- TABLA: PrestacionPractica (ACTUALIZADA) ---
+Todos los ítems de tipo 'acto' cambian estado_item a 'realizado' y se marca fecha_realizacion_item
+
+
+--- TABLA: PrestacionCobro (ACTUALIZADA) ---
+┌────┬──────────────┬──────────────┬─────────────────┬──────────┬──────────────────────────────────┐
+│ id │ prestacion_id│ fecha_cobro  │ tipo_cobro      │ monto    │ razon                            │
+├────┼──────────────┼──────────────┼─────────────────┼──────────┼──────────────────────────────────┤
+│ 1  │ 100          │ 2026-01-21   │ plus_consulta   │ 25000.00 │ "Cobro del día de consulta"      │
+│ 2  │ 100          │ 2026-02-05   │ plus_practica   │ 40000.00 │ "Plus 2 extracciones"            │  ⬅️ NUEVO
+│ 3  │ 100          │ 2026-02-05   │ plus_practica   │ 10000.00 │ "Plus limpieza"                  │  ⬅️ NUEVO
+│ 4  │ 100          │ 2026-02-05   │ plus_afiliado   │ 13071.28 │ "Importe afiliado cobrado"       │  ⬅️ NUEVO
+└────┴──────────────┴──────────────┴─────────────────┴──────────┴──────────────────────────────────┘
+
+
+════════════════════════════════════════════════════════════════════════════════
+
+📅 28/02/2026 (FIN DE MES - LIQUIDACIÓN)
+──────────────────────────────────────────────────────────────────────────────
+
+Cálculo del sueldo de la doctora para prestación 100:
+
+Honorarios OS autorizados:        $40,000.00
+MENOS: Plus afiliado cobrado:     -$13,071.28  ⬅️ Se descuenta
+MÁS: Plus doctora cobrados:       +$75,000.00  (25k consulta + 40k extracciones + 10k limpieza)
+────────────────────────────────────────────
+TOTAL A PAGAR A DOCTORA:          $101,928.72
+
+
+--- TABLA: Prestacion (ACTUALIZADA) ---
+id: 100
+estado: 'liquidada'  ⬅️ CAMBIO FINAL
+
+
+════════════════════════════════════════════════════════════════════════════════
+════════════════════════════════════════════════════════════════════════════════
+
+CASO DE USO: ANULACIÓN DE ÍTEM (doctora decide no hacer 1 extracción)
+════════════════════════════════════════════════════════════════════════════════
+
+📅 03/02/2026 (antes de la realización)
+
+Doctora decide que solo hará 1 extracción en vez de 2.
+
+Opción 1: EDITAR cantidad en PrestacionPractica
+─────────────────────────────────────────────
+Si la prestación aún está en 'autorizada' y no 'realizada':
+- Permitir cambiar cantidad de 2 a 1 en ítem id=3 (extracciones)
+- Registrar cambio en PrestacionAudit
+
+
+Opción 2: ANULAR uno de los ítems (más robusto para auditoría)
+───────────────────────────────────────────────────────────────
+Crear NUEVO ítem para la extracción que se anula:
+
+--- TABLA: PrestacionPractica (con anulación) ---
+┌────┬──────────────┬──────────┬──────────┬────────────┬───────────────┬──────────────┬──────────────────┐
+│ id │ prestacion_id│ practica │ cantidad │ tipo_conc. │ estado_item   │ monto_autor. │ fecha_anulacion  │
+├────┼──────────────┼──────────┼──────────┼────────────┼───────────────┼──────────────┼──────────────────┤
+│ 3  │ 100          │ 12       │ 1        │ acto       │ realizado     │ 15000.00     │ NULL             │  <-- Solo 1 extracción
+│ 7  │ 100          │ 12       │ 1        │ acto       │ anulado       │ 15000.00     │ 2026-02-03       │  ⬅️ Extracción anulada
+│ 5  │ 100          │ 14       │ 1        │ plus_doc.  │ realizado     │ 20000.00     │ NULL             │  <-- Plus solo 1 extracción
+│ 8  │ 100          │ 14       │ 1        │ plus_doc.  │ anulado       │ 20000.00     │ 2026-02-03       │  ⬅️ Plus anulado
+└────┴──────────────┴──────────┴──────────┴────────────┴───────────────┴──────────────┴──────────────────┘
+
+
+════════════════════════════════════════════════════════════════════════════════
+════════════════════════════════════════════════════════════════════════════════
+
+VALIDACIÓN REGLA 12 MESES IPSS (consulta 01.03 y limpieza 05.02)
+════════════════════════════════════════════════════════════════════════════════
+
+Query para validar ANTES de crear nueva prestación con código 01.03 o 05.02:
+
+SELECT MAX(pp.fecha_realizacion_item) as ultima_realizacion
+FROM PrestacionPractica pp
+JOIN Practica p ON pp.practica_id = p.id
+JOIN Prestacion pre ON pp.prestacion_id = pre.id
+WHERE pre.paciente_id = <paciente_id>
+  AND p.codigo IN ('01.03', '05.02')  -- Consulta o Limpieza
+  AND pp.estado_item = 'realizado'
+  AND p.obra_social_id = <obra_social_ipss_id>
+
+Si ultima_realizacion > (FECHA_ACTUAL - 12 meses):
+  ❌ RECHAZAR creación de nueva prestación con ese código
+  Mensaje: "El código 01.03 (Consulta) solo puede realizarse cada 12 meses en IPSS.
+            Última realización: 21/03/2025. Próxima permitida: 21/03/2026"
+
+
+════════════════════════════════════════════════════════════════════════════════
+════════════════════════════════════════════════════════════════════════════════
+
+RESUMEN DE VENTAJAS DEL DISEÑO
+════════════════════════════════════════════════════════════════════════════════
+
+✅ Permite múltiples cantidades de la misma práctica (2 extracciones, 3 restauraciones)
+✅ Baja lógica de prácticas (activa=False) mantiene integridad de prestaciones antiguas
+✅ Estados de prestación bloquean ediciones destructivas post-autorización
+✅ Ítems nunca se borran, solo se anulan (auditoría completa)
+✅ Cobros en tabla separada permiten múltiples registros a lo largo del tiempo
+✅ Tracking de fechas (solicitud, autorización, realización) para reportes
+✅ Validación de regla IPSS 12 meses con query simple
+✅ PrestacionAudit opcional para tracking de cambios post-autorización
+✅ Compatibilidad con informes existentes (campo monto en cabecera se mantiene)
+✅ Adjuntos de autorizaciones (fotos de fichas aprobadas)
+✅ Cálculo exacto de sueldo doctora: honorarios OS - plus afiliado + plus doctora
+
+════════════════════════════════════════════════════════════════════════════════
+FIN DEL MOCK
+════════════════════════════════════════════════════════════════════════════════
