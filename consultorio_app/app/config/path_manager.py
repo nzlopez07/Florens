@@ -139,7 +139,14 @@ class PathManager:
         Returns:
             Path: Ruta absoluta a version.txt
         """
-        return cls.get_base_dir() / 'version.txt'
+        base_path = cls.get_base_dir() / 'version.txt'
+        if base_path.exists():
+            return base_path
+        # En PyInstaller onedir los recursos viven en _MEIPASS/_internal
+        if cls.is_frozen() and hasattr(sys, '_MEIPASS'):
+            alt_path = Path(getattr(sys, '_MEIPASS')) / 'version.txt'
+            return alt_path
+        return base_path
     
     @classmethod
     def get_app_dir(cls) -> Path:
