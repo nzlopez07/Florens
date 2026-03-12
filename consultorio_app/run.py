@@ -659,8 +659,30 @@ def main():
             print("[DB] OK - Base de datos OK\n")
     
     # Configuración del servidor
-    host = os.environ.get('FLASK_HOST', '127.0.0.1')
-    port = int(os.environ.get('FLASK_PORT', 5000))
+    def _get_env_str(name: str, default: str = '') -> str:
+        value = os.environ.get(name)
+        if value is None:
+            return default
+        value = str(value).strip()
+        return value if value else default
+
+    def _get_env_int(names, default: int) -> int:
+        for name in names:
+            value = os.environ.get(name)
+            if value is None:
+                continue
+            value = str(value).strip()
+            if not value:
+                continue
+            try:
+                return int(value)
+            except ValueError:
+                print(f"[WARN] Variable de entorno {name} inválida: {value!r}. Usando fallback.")
+        return default
+
+    default_host = '0.0.0.0' if os.environ.get('PORT') else '127.0.0.1'
+    host = _get_env_str('FLASK_HOST', default_host)
+    port = _get_env_int(['PORT', 'FLASK_PORT'], 5000)
     debug = (
         os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes')
         or os.environ.get('FLASK_ENV') == 'development'

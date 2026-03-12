@@ -23,7 +23,7 @@
 
 ## Problema Inicial
 
-La doctora Florentina maneja actualmente un Excel para tracking de pacientes IPSS porque el sistema no permite:
+La doctora Florencia maneja actualmente un Excel para tracking de pacientes IPSS porque el sistema no permite:
 
 1. Diferenciar **fecha de autorización** vs **fecha de realización** de una prestación
 2. Registrar cobros en **múltiples momentos** (consulta inicial + realización posterior)
@@ -101,7 +101,7 @@ La doctora maneja columnas:
 - **Observaciones** (integral = consulta + limpieza, adp = adelanto de pago, etc.)
 - **Total Ficha** (suma final)
 
-**Objetivo:** El Excel debe dejar de existir. Toda esta lógica debe estar en OdontoApp.
+**Objetivo:** El Excel debe dejar de existir. Toda esta lógica debe estar en Florens.
 
 ---
 
