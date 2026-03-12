@@ -309,3 +309,73 @@ class ObraSocialNoEncontradaError(ObraSocialError):
     def __init__(self, obra_social_id: int = None):
         msg = f"Obra social no encontrada" + (f" (ID: {obra_social_id})" if obra_social_id else "")
         super().__init__(msg, "OBRA_SOCIAL_NO_ENCONTRADA")
+
+
+# ============================================================================
+# EXCEPCIONES DE PRESTACIÓN (IPSS)
+# ============================================================================
+
+class PrestacionError(OdontoAppError):
+    """Error relacionado con operaciones de prestación."""
+    pass
+
+
+class PrestacionNoEncontradaError(PrestacionError):
+    """La prestación buscada no existe."""
+    
+    def __init__(self, prestacion_id: int):
+        super().__init__(
+            f"Prestación no encontrada (ID: {prestacion_id})",
+            "PRESTACION_NO_ENCONTRADA"
+        )
+
+
+class EstadoPrestacionInvalidoError(PrestacionError):
+    """Transición de estado no permitida."""
+    
+    def __init__(self, estado_actual: str, estado_solicitado: str):
+        super().__init__(
+            f"No se puede pasar de estado '{estado_actual}' a '{estado_solicitado}'",
+            "ESTADO_PRESTACION_INVALIDO"
+        )
+
+
+class PrestacionNoAutorizadaError(PrestacionError):
+    """Intento de realizar una prestación sin autorización."""
+    
+    def __init__(self, prestacion_id: int):
+        super().__init__(
+            f"La prestación (ID: {prestacion_id}) no está autorizada. Debe registrar autorización primero.",
+            "PRESTACION_NO_AUTORIZADA"
+        )
+
+
+class FechasRealizacionInvalidasError(PrestacionError):
+    """La fecha de realización es anterior a la de autorización."""
+    
+    def __init__(self, fecha_autorizacion, fecha_realizacion):
+        super().__init__(
+            f"Fecha de realización ({fecha_realizacion}) no puede ser anterior a autorización ({fecha_autorizacion})",
+            "FECHAS_REALIZACION_INVALIDAS"
+        )
+
+
+class ReglaIPSSViolada(PrestacionError):
+    """Violación de regla de 12 meses para consulta/limpieza en IPSS."""
+    
+    def __init__(self, codigo: str, dias_desde_ultima):
+        super().__init__(
+            f"Código {codigo} realizado hace {dias_desde_ultima} días. IPSS requiere 12 meses entre realizaciones.",
+            "REGLA_IPSS_VIOLADA"
+        )
+
+
+class PracticaDadaDeBajaError(PrestacionError):
+    """Intento de usar una práctica que fue dada de baja."""
+    
+    def __init__(self, practica_codigo: str, practica_id: int = None):
+        msg = f"Práctica '{practica_codigo}' está dada de baja y no puede usarse en nuevas prestaciones"
+        if practica_id:
+            msg += f" (ID: {practica_id})"
+        super().__init__(msg, "PRACTICA_DADA_DE_BAJA")
+

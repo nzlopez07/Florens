@@ -23,35 +23,60 @@ from app.database import db
 from app.models import *  # Importar todos los modelos para que SQLAlchemy los reconozca
 from sqlalchemy import text
 
+# Importador de localidades (Salta) desde Georef
+try:
+    from tools.import_georef_salta import import_georef_salta
+except Exception:
+    import_georef_salta = None
+
 
 def init_default_data():
     """Inicializar datos por defecto en la BD (estados, localidades, obras sociales)."""
-    # Estados predefinidos para turnos
+    # Estados predefinidos para turnos (normalizados)
     estados_predefinidos = ['Pendiente', 'Confirmado', 'Atendido', 'NoAtendido', 'Cancelado']
     for nombre in estados_predefinidos:
         if not Estado.query.filter_by(nombre=nombre).first():
             estado = Estado(nombre=nombre)
             db.session.add(estado)
     
-    # Localidades por defecto
-    localidades_predefinidas = ['La Plata', 'Tolosa', 'Villa Elisa', 'Gonnet', 'Ringuelet', 'Los Hornos']
-    for nombre in localidades_predefinidas:
-        if not Localidad.query.filter_by(nombre=nombre).first():
-            localidad = Localidad(nombre=nombre)
-            db.session.add(localidad)
-    
-    # Obras sociales por defecto
-    obras_sociales_predefinidas = [
-        'OSDE', 'Medife', 'Afianzadora Salud', 'Swiss Medical', 
-        'Galeno', 'IPAM', 'Farmacia del Dr. Surtidor', 'Particular'
+    # Localidades por defecto (se suman capitales de provincias y algunas del AMBA
+    # + placeholders para complementar el import de Salta). El script de Georef
+    # ya puede haber insertado varias; aquí solo aseguramos que existan las mínimas
+    # para operar en caso de reinicio limpio.
+    provincias_capitales = [
+        'Buenos Aires', 'Ciudad Autónoma de Buenos Aires', 'Catamarca', 'Chaco', 'Chubut',
+        'Córdoba', 'Corrientes', 'Entre Ríos', 'Formosa', 'Jujuy', 'La Pampa', 'La Rioja',
+        'Mendoza', 'Misiones', 'Neuquén', 'Río Negro', 'Salta', 'San Juan', 'San Luis',
+        'Santa Cruz', 'Santa Fe', 'Santiago del Estero', 'Tierra del Fuego', 'Tucumán'
     ]
-    for nombre in obras_sociales_predefinidas:
+
+    for nombre in provincias_capitales:
+        if not Localidad.query.filter_by(nombre=nombre).first():
+            db.session.add(Localidad(nombre=nombre))
+    
+    # Obras sociales por defecto (solo las 3 operativas)
+    obras_operativas = ['PARTICULAR', 'IPSS', 'SANCOR SALUD']
+    for nombre in obras_operativas:
         if not ObraSocial.query.filter_by(nombre=nombre).first():
-            obra = ObraSocial(nombre=nombre)
-            db.session.add(obra)
+            db.session.add(ObraSocial(nombre=nombre))
+    
+    # Limpiar obras sociales no usadas (si no tienen pacientes ni prácticas asociadas)
+    otras_obras = ObraSocial.query.filter(~ObraSocial.nombre.in_(obras_operativas)).all()
+    for os_extra in otras_obras:
+        tiene_pacientes = bool(os_extra.pacientes)
+        tiene_practicas = bool(os_extra.practicas)
+        if not tiene_pacientes and not tiene_practicas:
+            db.session.delete(os_extra)
+        else:
+            print(f"[WARN] Obra social extra conservada por referencias: {os_extra.nombre}")
+
+    # NOTA: El import de Georef se ejecuta AHORA solo bajo demanda explícita
+    # Anteriormente causaba SQLite database locked errors por nested sessions
+    # Para importar localidades de Salta: python tools/import_georef_salta.py
     
     db.session.commit()
     print("[OK] Datos por defecto inicializados")
+    print("[INFO] Para importar localidades de Salta: python tools/import_georef_salta.py")
 
 
 def ensure_default_users():
@@ -99,6 +124,33 @@ def ensure_default_users():
         print(f"[OK] Usuarios iniciales creados ({created})")
     else:
         print("[SKIP] Usuarios iniciales ya existen")
+
+
+def reset_database_with_basics():
+    """Recrea la BD desde cero y carga datos esenciales (estados, localidades, obras sociales, usuarios).
+
+    Pensado para entornos de desarrollo/QA: asegura esquema limpio + datos mínimos
+    para que los turnos y prestaciones se creen correctamente.
+    """
+    print("\n" + "*" * 35)
+    print("[ADVERTENCIA] FUNCIÓN reset_database_with_basics() EJECUTADA")
+    print("[ADVERTENCIA] Se va a ELIMINAR completamente la base de datos")
+    print("*" * 35 + "\n")
+    
+    print("[DB] Reiniciando base de datos completa (drop_all + create_all)...")
+    db.drop_all()
+    db.create_all()
+    print("[OK] Tablas creadas")
+
+    # Ejecutar migraciones estructurales (columnas adicionales, tablas auxiliares)
+    # Solo si se solicita explícitamente con FLASK_RUN_MIGRATIONS
+    if os.environ.get('FLASK_RUN_MIGRATIONS', '').lower() in ('1', 'true', 'yes'):
+        run_migrations_sqlite()
+
+    # Semillas indispensables
+    init_default_data()
+    ensure_default_users()
+    print("[OK] Datos básicos cargados (estados, localidades, obras sociales, usuarios)")
 
 def run_migrations_sqlite():
     """Execute DB migrations to align schema with Prestaciones and nro_afiliado.
@@ -149,7 +201,7 @@ def run_migrations_sqlite():
     turnos_cols = db.session.execute(text("PRAGMA table_info('turnos')")).fetchall()
     turnos_col_names = {c[1] for c in turnos_cols}
     if 'operacion_id' in turnos_col_names and 'prestacion_id' not in turnos_col_names:
-        print("🔧 Migrando columna turnos.operacion_id -> prestacion_id...")
+        print("[DB] Migrando columna turnos.operacion_id -> prestacion_id...")
         db.session.execute(text("BEGIN TRANSACTION"))
         db.session.execute(text(
             "CREATE TABLE IF NOT EXISTS turnos_tmp (\n"
@@ -218,6 +270,13 @@ def run_migrations_sqlite():
             db.session.execute(text("ALTER TABLE practicas ADD COLUMN monto_unitario REAL NOT NULL DEFAULT 0.0"))
             db.session.commit()
             print("[OK] practicas.monto_unitario agregada")
+        
+        # 4b) Add es_plus to practicas if missing
+        if 'es_plus' not in practicas_col_names:
+            print("[TOOLS] Agregando columna es_plus a practicas...")
+            db.session.execute(text("ALTER TABLE practicas ADD COLUMN es_plus BOOLEAN NOT NULL DEFAULT 0"))
+            db.session.commit()
+            print("[OK] practicas.es_plus agregada")
 
     # 5) Remove codigo_id from prestaciones if exists
     if 'prestaciones' in table_names:
@@ -300,7 +359,143 @@ def run_migrations_sqlite():
                 print(f"[ERROR] No se pudo agregar duracion: {e}")
                 db.session.rollback()
 
-    # 8) Crear tabla odontogramas si no existe
+    # 8) Agregar campos IPSS a prestaciones
+    if 'prestaciones' in table_names:
+        print("[TOOLS] Verificando campos IPSS en prestaciones...")
+        prestaciones_cols = db.session.execute(text("PRAGMA table_info('prestaciones')")).fetchall()
+        prestaciones_col_names = {c[1] for c in prestaciones_cols}
+        
+        campos_ipss = {
+            'estado': "VARCHAR(20) NOT NULL DEFAULT 'borrador'",
+            'fecha_solicitud': "DATE",
+            'fecha_autorizacion': "DATE",
+            'fecha_realizacion': "DATE",
+            'importe_afiliado_autorizado': "FLOAT",
+            'importe_coseguro_autorizado': "FLOAT",
+            'importe_profesional_autorizado': "FLOAT",
+            'autorizacion_adjunta_path': "VARCHAR(255)",
+            'observaciones_autorizacion': "TEXT"
+        }
+        
+        for campo, tipo in campos_ipss.items():
+            if campo not in prestaciones_col_names:
+                print(f"[TOOLS] Agregando columna {campo} a prestaciones...")
+                try:
+                    db.session.execute(text(f"ALTER TABLE prestaciones ADD COLUMN {campo} {tipo}"))
+                    db.session.commit()
+                    print(f"[OK] Columna {campo} agregada")
+                except Exception as e:
+                    print(f"[ERROR] No se pudo agregar {campo}: {e}")
+                    db.session.rollback()
+
+    # 9) Agregar campos IPSS a prestacion_practica
+    if 'prestacion_practica' in table_names:
+        print("[TOOLS] Verificando campos IPSS en prestacion_practica...")
+        pp_cols = db.session.execute(text("PRAGMA table_info('prestacion_practica')")).fetchall()
+        pp_col_names = {c[1] for c in pp_cols}
+        
+        campos_pp_ipss = {
+            'tipo_concepto': "VARCHAR(20) NOT NULL DEFAULT 'acto'",
+            'estado_item': "VARCHAR(20) NOT NULL DEFAULT 'pendiente'",
+            'monto_autorizado': "FLOAT",
+            'fecha_realizacion_item': "DATE",
+            'fecha_anulacion': "DATE",
+            'razon_anulacion': "VARCHAR(255)"
+        }
+        
+        for campo, tipo in campos_pp_ipss.items():
+            if campo not in pp_col_names:
+                print(f"[TOOLS] Agregando columna {campo} a prestacion_practica...")
+                try:
+                    db.session.execute(text(f"ALTER TABLE prestacion_practica ADD COLUMN {campo} {tipo}"))
+                    db.session.commit()
+                    print(f"[OK] Columna {campo} agregada")
+                except Exception as e:
+                    print(f"[ERROR] No se pudo agregar {campo}: {e}")
+                    db.session.rollback()
+
+    # 10) Agregar campos de baja lógica a practicas
+    if 'practicas' in table_names:
+        print("[TOOLS] Verificando campos de baja lógica en practicas...")
+        practicas_cols = db.session.execute(text("PRAGMA table_info('practicas')")).fetchall()
+        practicas_col_names = {c[1] for c in practicas_cols}
+        
+        campos_practicas = {
+            'activa': "BOOLEAN NOT NULL DEFAULT 1",
+            'fecha_baja': "DATE",
+            'razon_baja': "VARCHAR(255)"
+        }
+        
+        for campo, tipo in campos_practicas.items():
+            if campo not in practicas_col_names:
+                print(f"[TOOLS] Agregando columna {campo} a practicas...")
+                try:
+                    db.session.execute(text(f"ALTER TABLE practicas ADD COLUMN {campo} {tipo}"))
+                    db.session.commit()
+                    print(f"[OK] Columna {campo} agregada")
+                except Exception as e:
+                    print(f"[ERROR] No se pudo agregar {campo}: {e}")
+                    db.session.rollback()
+
+    # 11) Crear tabla prestacion_cobro si no existe
+    prestacion_cobro_exists = db.session.execute(text(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='prestacion_cobro'"
+    )).fetchone()
+    if not prestacion_cobro_exists:
+        print("[TOOLS] Creando tabla prestacion_cobro...")
+        try:
+            db.session.execute(text(
+                """
+                CREATE TABLE prestacion_cobro (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    prestacion_id INTEGER NOT NULL,
+                    fecha_cobro DATE NOT NULL,
+                    tipo_cobro VARCHAR(30) NOT NULL,
+                    monto FLOAT NOT NULL DEFAULT 0.0,
+                    razon VARCHAR(255),
+                    usuario_id INTEGER,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(prestacion_id) REFERENCES prestaciones(id),
+                    FOREIGN KEY(usuario_id) REFERENCES usuarios(id)
+                )
+                """
+            ))
+            db.session.commit()
+            print("[OK] Tabla prestacion_cobro creada")
+        except Exception as e:
+            print(f"[ERROR] No se pudo crear prestacion_cobro: {e}")
+            db.session.rollback()
+
+    # 12) Crear tabla prestacion_audit si no existe
+    prestacion_audit_exists = db.session.execute(text(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='prestacion_audit'"
+    )).fetchone()
+    if not prestacion_audit_exists:
+        print("[TOOLS] Creando tabla prestacion_audit...")
+        try:
+            db.session.execute(text(
+                """
+                CREATE TABLE prestacion_audit (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    prestacion_id INTEGER NOT NULL,
+                    campo VARCHAR(50) NOT NULL,
+                    valor_anterior TEXT,
+                    valor_nuevo TEXT,
+                    fecha_cambio DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    razon VARCHAR(255),
+                    usuario_id INTEGER,
+                    FOREIGN KEY(prestacion_id) REFERENCES prestaciones(id),
+                    FOREIGN KEY(usuario_id) REFERENCES usuarios(id)
+                )
+                """
+            ))
+            db.session.commit()
+            print("[OK] Tabla prestacion_audit creada")
+        except Exception as e:
+            print(f"[ERROR] No se pudo crear prestacion_audit: {e}")
+            db.session.rollback()
+
+    # 13) Crear tabla odontogramas si no existe
     if 'odontogramas' not in table_names:
         print("[TOOLS] Creando tabla odontogramas...")
         db.session.execute(text(
@@ -322,7 +517,7 @@ def run_migrations_sqlite():
         db.session.commit()
         print("[OK] Tabla odontogramas creada")
 
-    # 9) Crear tabla odontograma_caras si no existe
+    # 14) Crear tabla odontograma_caras si no existe
     # Nota: usar PRAGMA table_info porque table_names se tomó al inicio
     odontograma_caras_exists = db.session.execute(text(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='odontograma_caras'"
@@ -347,7 +542,7 @@ def run_migrations_sqlite():
         db.session.commit()
         print("[OK] Tabla odontograma_caras creada")
 
-    # 10) Agregar columna estado_id a turnos si no existe y backfill desde nombre
+    # 15) Agregar columna estado_id a turnos si no existe y backfill desde nombre
     turnos_cols = db.session.execute(text("PRAGMA table_info('turnos')")).fetchall()
     turnos_col_names = {c[1] for c in turnos_cols}
     if 'estado_id' not in turnos_col_names:
@@ -373,7 +568,7 @@ def run_migrations_sqlite():
         print(f"[ERROR] Backfill estado_id en turnos: {e}")
         db.session.rollback()
 
-    # 11) Agregar columnas estado_anterior_id / estado_nuevo_id a cambios_estado y backfill
+    # 16) Agregar columnas estado_anterior_id / estado_nuevo_id a cambios_estado y backfill
     cambios_cols = db.session.execute(text("PRAGMA table_info('cambios_estado')")).fetchall()
     cambios_col_names = {c[1] for c in cambios_cols}
     need_commit = False
@@ -422,28 +617,46 @@ def main():
     app = create_app()
 
     with app.app_context():
-        # Verificar si la BD existe y tiene esquema desactualizado
-        # Si es desarrollo, recrear tablas desde cero
-        if os.environ.get('FLASK_RESET_DB'):
-            print("🔄 Eliminando y recreando base de datos...")
-            db.drop_all()
+        # DEBUG: Mostrar todas las variables de entorno relevantes
+        print("\n" + "="*70)
+        print("[DEBUG] Variables de entorno detectadas:")
+        print(f"  FLASK_RESET_AND_SEED = {os.environ.get('FLASK_RESET_AND_SEED', 'NO SETEADA')}")
+        print(f"  FLASK_RESET_DB = {os.environ.get('FLASK_RESET_DB', 'NO SETEADA')}")
+        print(f"  FLASK_RUN_MIGRATIONS = {os.environ.get('FLASK_RUN_MIGRATIONS', 'NO SETEADA')}")
+        print(f"  FLASK_SEED_DEFAULTS = {os.environ.get('FLASK_SEED_DEFAULTS', 'NO SETEADA')}")
+        print("="*70 + "\n")
         
-        db.create_all()
-        print("[OK] Base de datos verificada")
+        # === LÓGICA DE BASE DE DATOS ===
+        reset_and_seed = os.environ.get('FLASK_RESET_AND_SEED', '').lower() in ('1', 'true', 'yes')
+        run_migrations = os.environ.get('FLASK_RUN_MIGRATIONS', '').lower() in ('1', 'true', 'yes')
+        seed_defaults = os.environ.get('FLASK_SEED_DEFAULTS', '').lower() in ('1', 'true', 'yes')
         
-        # Ejecutar migraciones (opt-in)
-        if os.environ.get('FLASK_RUN_MIGRATIONS', '').lower() in ('1', 'true', 'yes'):
-            run_migrations_sqlite()
-
-        # Inicializar datos por defecto solo si se solicita explícitamente
-        seed_flag = os.environ.get('FLASK_SEED_DEFAULTS', '').lower() in ('1', 'true', 'yes')
-        if seed_flag:
-            init_default_data()
+        if reset_and_seed:
+            # === RESET COMPLETO ===
+            print("[DB RESET] ADVERTENCIA: Se está reseteando COMPLETAMENTE la base de datos")
+            print("   - Se eliminarán TODOS los datos")
+            print("   - Se recrearán las tablas")
+            print("   - Se ejecutarán migraciones")
+            print("   - Se cargarán datos básicos (estados, localidades, usuarios)\n")
+            reset_database_with_basics()
         else:
-            print("[SKIP] Carga de datos por defecto deshabilitada (FLASK_SEED_DEFAULTS no activo)")
-
-        # Crear usuarios iniciales si no existen
-        ensure_default_users()
+            # === MODO SEGURO (por defecto) ===
+            print("[DB] MODO SEGURO: solo verificando/creando tablas (NO se borran datos)\n")
+            db.create_all()
+            
+            if run_migrations:
+                print("[DB] Ejecutando migraciones...")
+                run_migrations_sqlite()
+                print()
+            
+            if seed_defaults:
+                print("[DB] Cargando datos por defecto...")
+                init_default_data()
+                print()
+            
+            # Siempre crear usuarios iniciales (seguro)
+            ensure_default_users()
+            print("[DB] OK - Base de datos OK\n")
     
     # Configuración del servidor
     host = os.environ.get('FLASK_HOST', '127.0.0.1')

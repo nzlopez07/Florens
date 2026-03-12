@@ -72,13 +72,13 @@
                         <tr>
                             <td><strong>{{ mes.nombre|capitalize }}</strong></td>
                             <td class="text-end text-success">
-                                ${{ "{:,.2f}".format(mes.ingresos) }}
+                                {{ mes.ingresos|format_currency }}
                             </td>
                             <td class="text-end text-danger">
-                                ${{ "{:,.2f}".format(mes.egresos) }}
+                                {{ mes.egresos|format_currency }}
                             </td>
                             <td class="text-end {% if mes.balance >= 0 %}text-primary{% else %}text-warning{% endif %}">
-                                <strong>${{ "{:,.2f}".format(mes.balance) }}</strong>
+                                <strong>{{ mes.balance|format_currency }}</strong>
                             </td>
                         </tr>
                         {% endfor %}
@@ -87,13 +87,13 @@
                         <tr>
                             <td><strong>TOTAL {{ evolucion.anio }}</strong></td>
                             <td class="text-end text-success">
-                                <strong>${{ "{:,.2f}".format(evolucion.meses|sum(attribute='ingresos')) }}</strong>
+                                <strong>{{ evolucion.meses|sum(attribute='ingresos')|format_currency }}</strong>
                             </td>
                             <td class="text-end text-danger">
-                                <strong>${{ "{:,.2f}".format(evolucion.meses|sum(attribute='egresos')) }}</strong>
+                                <strong>{{ evolucion.meses|sum(attribute='egresos')|format_currency }}</strong>
                             </td>
                             <td class="text-end {% if (evolucion.meses|sum(attribute='balance')) >= 0 %}text-primary{% else %}text-warning{% endif %}">
-                                <strong>${{ "{:,.2f}".format(evolucion.meses|sum(attribute='balance')) }}</strong>
+                                <strong>{{ evolucion.meses|sum(attribute='balance')|format_currency }}</strong>
                             </td>
                         </tr>
                     </tfoot>

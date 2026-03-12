@@ -1,60 +1,60 @@
-# Archivos de Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+# Estrategia: ignorar todo y permitir solo lo necesario para esta app.
+*
 
-# Entorno virtual
+# Permitir este archivo
+!.gitignore
+
+# Permitir carpetas de la app
+!app/
+!app/**
+!config/
+!config/**
+!tools/
+!tools/**
+
+# Data local: no se versiona (opcional: dejar solo .gitkeep)
+data/
+!data/.gitkeep
+
+# Permitir archivos raíz necesarios para ejecución/distribución
+!run.py
+!requirements.txt
+!README.md
+!LEEME.txt
+!version.txt
+!Florens.spec
+
+# Ruido explícito (aunque esté dentro de carpetas permitidas)
+**/__pycache__/
+**/*.py[cod]
+**/*.pyo
+**/*.pyd
+**/*.so
+**/*.log
+
+# Entornos virtuales y secretos
 venv/
 .venv/
 ENV/
 env/
+.env
+.env.local
 
-# Flask instance folder (LEGACY - ahora se usa data/)
-instance/
-*.db
-*.sqlite
-
-# Datos de la aplicación (NO commitear datos reales)
-data/
-config/settings.ini
-
-# Logs
-logs/
-*.log
-
-# PyInstaller
-build/
-dist/
-*.spec
-
-# IDE
+# IDE / SO
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# Sistema operativo
 .DS_Store
 Thumbs.db
 
-# Entorno y secrets
-.env
-.env.local
+# Carpetas de salida / pruebas / documentación no necesarias para deploy runtime
+build/
+dist/
+docs/
+tests/
+logs/
+
+# Mantener fuera artefactos ad-hoc
+nuevosRecs.txt
 

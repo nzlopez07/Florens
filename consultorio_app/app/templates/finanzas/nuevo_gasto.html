@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Nuevo Gasto{% endblock %}
+{% block title %}{% if es_edicion %}Editar Gasto{% else %}Nuevo Gasto{% endif %}{% endblock %}
 
 {% macro render_field(field) %}
     <div class="mb-3">
@@ -33,7 +33,10 @@
         <div class="col-md-8 offset-md-2">
             <div class="card">
                 <div class="card-header">
-                    <h4 class="mb-0"><i class="fas fa-plus"></i> Registrar Nuevo Gasto</h4>
+                    <h4 class="mb-0">
+                        <i class="fas {% if es_edicion %}fa-pen{% else %}fa-plus{% endif %}"></i>
+                        {% if es_edicion %}Editar Gasto{% else %}Registrar Nuevo Gasto{% endif %}
+                    </h4>
                 </div>
                 <div class="card-body">
                     <form method="post" novalidate>
@@ -50,35 +53,23 @@
                         </div>
 
                         {{ render_field(form.categoria) }}
-                                {% for cat in categorias %}
-                                <option value="{{ cat }}">{{ cat }}</option>
-                                {% endfor %}
-                            </select>
+
+                        <div id="paciente-relacionado-wrapper" style="display: none;">
+                            {{ render_field(form.paciente_id) }}
                             <small class="form-text text-muted">
-                                <strong>MATERIAL:</strong> Herramientas, equipos<br>
-                                <strong>INSUMO:</strong> Materiales de uso diario<br>
-                                <strong>MATRICULA:</strong> Matrículas profesionales<br>
-                                <strong>CURSO:</strong> Capacitaciones, formación<br>
-                                <strong>OPERATIVO:</strong> Alquiler, servicios, impuestos<br>
-                                <strong>OTRO:</strong> Otros gastos
+                                Este campo es obligatorio para la categoría Técnico prótesis.
                             </small>
                         </div>
 
-                        <div class="mb-3">
-                            <label for="observaciones" class="form-label">Observaciones</label>
-                            <textarea class="form-control" 
-                                      id="observaciones" 
-                                      name="observaciones" 
-                                      rows="3"
-                                      placeholder="Detalles adicionales (opcional)"></textarea>
-                        </div>
+                        {{ render_field(form.observaciones) }}
 
                         <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                             <a href="{{ url_for('finanzas.gastos') }}" class="btn btn-secondary">
                                 <i class="fas fa-times"></i> Cancelar
                             </a>
                             <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-save"></i> Guardar Gasto
+                                <i class="fas fa-save"></i>
+                                {% if es_edicion %}Guardar Cambios{% else %}Guardar Gasto{% endif %}
                             </button>
                         </div>
                     </form>
@@ -87,4 +78,27 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function togglePacienteRelacionado() {
+        const categoria = document.getElementById('categoria');
+        const wrapper = document.getElementById('paciente-relacionado-wrapper');
+        if (!categoria || !wrapper) {
+            return;
+        }
+
+        const visible = categoria.value === 'TECNICO_PROTESIS';
+        wrapper.style.display = visible ? 'block' : 'none';
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const categoria = document.getElementById('categoria');
+        if (categoria) {
+            categoria.addEventListener('change', togglePacienteRelacionado);
+        }
+        togglePacienteRelacionado();
+    });
+</script>
 {% endblock %}

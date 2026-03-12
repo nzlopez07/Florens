@@ -9,6 +9,8 @@ from .prestacion import Prestacion
 from .codigo import Codigo
 from .practica import Practica
 from .prestacion_practica import PrestacionPractica
+from .prestacion_cobro import PrestacionCobro
+from .prestacion_audit import PrestacionAudit
 from .odontograma import Odontograma, OdontogramaCara
 from .conversation import Conversation
 from .usuario import Usuario
@@ -26,6 +28,8 @@ __all__ = [
     'Codigo',
     'Practica',
     'PrestacionPractica',
+    'PrestacionCobro',
+    'PrestacionAudit',
     'Odontograma',
     'OdontogramaCara',
     'Conversation',

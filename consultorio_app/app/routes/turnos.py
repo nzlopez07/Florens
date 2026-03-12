@@ -1,6 +1,7 @@
-from datetime import datetime
+from datetime import datetime, date
 from flask import render_template, request, redirect, url_for, flash
 from flask_login import login_required
+from app.database import db
 from app.models import Paciente, Estado, Turno, CambioEstado
 from app.forms import TurnoForm
 from app.services.turno import (
@@ -85,10 +86,10 @@ def nuevo_turno():
     """Crear un nuevo turno con validación WTF."""
     form = TurnoForm()
     
-    # Poblar select fields dinámicamente
+    # Poblar select fields dinámicamente — excluir pacientes preliminares del selector
     form.paciente_id.choices = [
         (0, '--- Seleccionar ---'),
-        *[(p.id, f'{p.nombre} {p.apellido} (DNI: {p.dni})') for p in Paciente.query.order_by(Paciente.apellido).all()]
+        *[(p.id, f'{p.nombre} {p.apellido} (DNI: {p.dni})') for p in Paciente.query.filter_by(es_preliminar=False).order_by(Paciente.apellido).all()]
     ]
     form.estado.choices = [
         ('Confirmado', 'Confirmado'),
@@ -102,22 +103,42 @@ def nuevo_turno():
     
     if form.validate_on_submit():
         try:
-            # Calcular duración total en minutos
+            # Duración total en minutos
             duracion_total = (form.duracion_horas.data * 60) + form.duracion_minutos.data
-            
-            # Los datos ya están validados por WTF
+
+            # Resolver paciente_id: registrado o crear preliminar
+            if form.paciente_no_registrado.data:
+                dni_placeholder = f'PRELIM-{int(datetime.utcnow().timestamp())}'
+                paciente_prelim = Paciente(
+                    nombre=form.nombre_no_reg.data.strip(),
+                    apellido=form.apellido_no_reg.data.strip(),
+                    dni=dni_placeholder,
+                    fecha_nac=date(1900, 1, 1),
+                    telefono=form.telefono_no_reg.data.strip() if form.telefono_no_reg.data else None,
+                    es_preliminar=True,
+                )
+                db.session.add(paciente_prelim)
+                db.session.flush()  # obtener ID sin commitear
+                paciente_id_final = paciente_prelim.id
+            else:
+                paciente_id_final = form.paciente_id.data
+
             turno = AgendarTurnoService.execute(
-                paciente_id=form.paciente_id.data,
+                paciente_id=paciente_id_final,
                 fecha=form.fecha.data,
                 hora=form.hora.data,
                 duracion=duracion_total,
                 detalle=form.detalle.data,
             )
             flash('Turno creado exitosamente', 'success')
-            return redirect(url_for('main.ver_paciente', id=form.paciente_id.data))
+            if form.paciente_no_registrado.data:
+                return redirect(url_for('main.listar_turnos'))
+            return redirect(url_for('main.ver_paciente', id=paciente_id_final))
         except (TurnoSolapamientoError, TurnoFechaInvalidaError, PacienteNoEncontradoError) as e:
+            db.session.rollback()
             flash(str(e), 'error')
         except Exception as e:
+            db.session.rollback()
             flash(f'Error al crear turno: {str(e)}', 'error')
 
     return render_template('turnos/nuevo.html', form=form)

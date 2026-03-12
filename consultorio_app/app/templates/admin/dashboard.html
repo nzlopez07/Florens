@@ -79,7 +79,7 @@
                     {% if db_info.existe %}
                     <tr>
                         <th>Tamaño:</th>
-                        <td>{{ "%.2f"|format(db_info.tamano / 1024 / 1024) }} MB</td>
+                        <td>{{ (db_info.tamano / 1024 / 1024)|format_currency }} MB</td>
                     </tr>
                     <tr>
                         <th>Última modificación:</th>
@@ -110,7 +110,7 @@
                             <i class="bi bi-file-earmark-zip"></i>
                             <strong>{{ backup.nombre }}</strong><br>
                             <small class="text-muted">
-                                {{ "%.2f"|format(backup.tamano / 1024 / 1024) }} MB - {{ backup.fecha }}
+                                {{ (backup.tamano / 1024 / 1024)|format_currency }} MB - {{ backup.fecha }}
                             </small>
                         </li>
                         {% endfor %}

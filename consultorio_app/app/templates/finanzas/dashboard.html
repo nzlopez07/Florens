@@ -84,7 +84,7 @@
                     <h5 class="card-title text-success">
                         <i class="fas fa-arrow-up"></i> Ingresos
                     </h5>
-                    <h2 class="mb-0">${{ "{:,.2f}".format(resumen.ingresos) }}</h2>
+                    <h2 class="mb-0">{{ resumen.ingresos|format_currency }}</h2>
                     <small class="text-muted">Total de cobros</small>
                 </div>
             </div>
@@ -96,7 +96,7 @@
                     <h5 class="card-title text-danger">
                         <i class="fas fa-arrow-down"></i> Egresos
                     </h5>
-                    <h2 class="mb-0">${{ "{:,.2f}".format(resumen.egresos) }}</h2>
+                    <h2 class="mb-0">{{ resumen.egresos|format_currency }}</h2>
                     <small class="text-muted">Total de gastos</small>
                 </div>
             </div>
@@ -108,7 +108,7 @@
                     <h5 class="card-title {% if resumen.balance >= 0 %}text-primary{% else %}text-warning{% endif %}">
                         <i class="fas fa-balance-scale"></i> Balance
                     </h5>
-                    <h2 class="mb-0">${{ "{:,.2f}".format(resumen.balance) }}</h2>
+                    <h2 class="mb-0">{{ resumen.balance|format_currency }}</h2>
                     <small class="text-muted">Ingresos - Egresos</small>
                 </div>
             </div>
@@ -127,7 +127,7 @@
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
                             <h6 class="card-subtitle mb-2 text-muted">{{ fuente.fuente }}</h6>
-                            <h4 class="mb-0">${{ "{:,.2f}".format(fuente.total) }}</h4>
+                            <h4 class="mb-0">{{ fuente.total|format_currency }}</h4>
                             <small class="text-muted">{{ fuente.cantidad }} prestacion{% if fuente.cantidad != 1 %}es{% endif %}</small>
                         </div>
                         <div>
@@ -217,7 +217,7 @@
                             <tr>
                                 <td>{{ item.codigo }} - {{ item.descripcion }}</td>
                                 <td class="text-end">{{ item.cantidad }}</td>
-                                <td class="text-end">${{ "{:,.2f}".format(item.total) }}</td>
+                                <td class="text-end">{{ item.total|format_currency }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -249,7 +249,7 @@
                             <tr>
                                 <td>{{ item.categoria }}</td>
                                 <td class="text-end">{{ item.cantidad }}</td>
-                                <td class="text-end">${{ "{:,.2f}".format(item.total) }}</td>
+                                <td class="text-end">{{ item.total|format_currency }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -290,14 +290,14 @@
                                     <td>{{ prestacion.fecha.strftime('%d/%m/%Y') }}</td>
                                     <td>{{ prestacion.paciente }}</td>
                                     <td><small>{{ prestacion.practicas }}</small></td>
-                                    <td class="text-end"><strong>${{ "{:,.2f}".format(prestacion.monto) }}</strong></td>
+                                    <td class="text-end"><strong>{{ prestacion.monto|format_currency }}</strong></td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
                             <tfoot>
                                 <tr class="table-primary">
                                     <td colspan="3" class="text-end"><strong>Total:</strong></td>
-                                    <td class="text-end"><strong>${{ "{:,.2f}".format(detalle_prestaciones|sum(attribute='monto')) }}</strong></td>
+                                    <td class="text-end"><strong>{{ detalle_prestaciones|sum(attribute='monto')|format_currency }}</strong></td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -364,7 +364,7 @@
                             const value = context.parsed || 0;
                             const total = context.dataset.data.reduce((a, b) => a + b, 0);
                             const percentage = ((value / total) * 100).toFixed(1);
-                            return label + ': $' + value.toFixed(2) + ' (' + percentage + '%)';
+                            return label + ': ' + formatCurrencyAR(value) + ' (' + percentage + '%)';
                         }
                     }
                 }

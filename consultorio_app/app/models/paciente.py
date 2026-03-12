@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, ForeignKey
+from sqlalchemy import Column, Integer, String, Date, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from app.database import db
 
@@ -21,6 +21,7 @@ class Paciente(db.Model):
     parentesco = Column(String, nullable=True)
     lugar_trabajo = Column(String, nullable=True)
     barrio = Column(String, nullable=True)
+    es_preliminar = Column(Boolean, nullable=False, default=False)
     turnos = relationship("Turno", back_populates="paciente", cascade="all, delete-orphan")
     prestaciones = relationship("Prestacion", back_populates="paciente")
     odontogramas = relationship("Odontograma", back_populates="paciente", cascade="all, delete-orphan")

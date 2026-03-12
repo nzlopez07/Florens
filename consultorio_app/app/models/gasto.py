@@ -24,7 +24,7 @@ class Gasto(db.Model):
     fecha = db.Column(db.Date, nullable=False)
     
     # Categorización
-    categoria = db.Column(db.String(50), nullable=False)  # MATERIAL, INSUMO, MATRICULA, CURSO, OPERATIVO, OTRO
+    categoria = db.Column(db.String(50), nullable=False)  # INSUMO, OPERATIVO, CURSO, EJERCICIO_PROFESIONAL, OTROS
     
     # Detalles adicionales
     observaciones = db.Column(db.Text, nullable=True)
@@ -44,11 +44,11 @@ class Gasto(db.Model):
     def categoria_display(self):
         """Retorna el nombre legible de la categoría."""
         categorias = {
-            'MATERIAL': 'Material Odontológico',
-            'INSUMO': 'Insumos',
-            'MATRICULA': 'Matrícula Profesional',
+            'INSUMO': 'Insumos (incluye equipamiento)',
+            'OPERATIVO': 'Gasto Operativo (incluye residuos patológicos)',
             'CURSO': 'Curso/Capacitación',
-            'OPERATIVO': 'Gasto Operativo',
-            'OTRO': 'Otro'
+            'EJERCICIO_PROFESIONAL': 'Ejercicio Profesional (matrícula, jubilación, monotributo)',
+            'TECNICO_PROTESIS': 'Técnico prótesis',
+            'OTROS': 'Otros Gastos'
         }
         return categorias.get(self.categoria, self.categoria)

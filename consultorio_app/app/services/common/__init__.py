@@ -35,6 +35,11 @@ from .exceptions import (
     PrestacionNoEncontradaError,
     DatosInvalidosError,
     ObraSocialNoEncontradaError,
+    EstadoPrestacionInvalidoError,
+    PrestacionNoAutorizadaError,
+    FechasRealizacionInvalidasError,
+    ReglaIPSSViolada,
+    PracticaDadaDeBajaError,
 )
 
 from .validators import (
@@ -76,6 +81,11 @@ __all__ = [
     'PrestacionNoEncontradaError',
     'DatosInvalidosError',
     'ObraSocialNoEncontradaError',
+    'EstadoPrestacionInvalidoError',
+    'PrestacionNoAutorizadaError',
+    'FechasRealizacionInvalidasError',
+    'ReglaIPSSViolada',
+    'PracticaDadaDeBajaError',
     'ValidadorPaciente',
     'ValidadorTurno',
     'ValidadorLocalidad',

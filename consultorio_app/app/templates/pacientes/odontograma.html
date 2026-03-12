@@ -77,12 +77,6 @@
         <small class="text-muted">Paciente: {{ odontograma.paciente.apellido }}, {{ odontograma.paciente.nombre }}</small><br>
         <small class="text-muted">Versión: {{ odontograma.version_seq }}{% if odontograma.es_actual %} (Actual){% else %} (Histórica){% endif %}</small><br>
         <small class="text-muted">Actualizado: {{ odontograma.actualizado_en.strftime('%d/%m/%Y %H:%M') }}</small>
-        {% if desactualizado %}
-        <div class="mt-2 alert alert-warning py-2 px-3 mb-0">
-            <i class="bi bi-exclamation-triangle"></i>
-            <strong>Odontograma desactualizado:</strong> Última prestación registrada el {{ ultima_prestacion.strftime('%d/%m/%Y %H:%M') }}. Por favor, crea una nueva versión para actualizar los cambios.
-        </div>
-        {% endif %}
     </div>
     <div class="btn-group btn-group-sm">
         <a class="btn btn-outline-secondary" href="{{ url_for('main.ver_paciente', id=odontograma.paciente.id) }}">

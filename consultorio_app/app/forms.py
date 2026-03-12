@@ -126,11 +126,32 @@ class PacienteForm(FlaskForm):
 
 class TurnoForm(FlaskForm):
     """Formulario para crear/editar turnos."""
-    
+
+    paciente_no_registrado = BooleanField(
+        'Paciente no registrado',
+        default=False,
+        validators=[Optional()]
+    )
+
     paciente_id = SelectField(
         'Paciente',
         coerce=int,
-        validators=[DataRequired(message='Debe seleccionar un paciente')]
+        validators=[Optional()]
+    )
+
+    nombre_no_reg = StringField(
+        'Nombre',
+        validators=[Optional(), Length(max=100)]
+    )
+
+    apellido_no_reg = StringField(
+        'Apellido',
+        validators=[Optional(), Length(max=100)]
+    )
+
+    telefono_no_reg = StringField(
+        'Teléfono',
+        validators=[Optional(), Length(max=50)]
     )
     
     fecha = DateField(
@@ -196,7 +217,7 @@ class TurnoForm(FlaskForm):
                 raise ValidationError(mensaje)
 
     def validate(self, extra_validators=None):
-        """Validación cruzada: duración total debe ser > 0 minutos."""
+        """Validación cruzada: duración total debe ser > 0 minutos; paciente requerido."""
         if not super().validate(extra_validators=extra_validators):
             return False
         try:
@@ -207,14 +228,30 @@ class TurnoForm(FlaskForm):
                 self.duracion_horas.errors.append('La duración total debe ser mayor a 0 minutos')
                 return False
         except Exception:
-            # Si algo extraño ocurre, dejar que validaciones de campo manejen el error
             return False
+        # Validación condicional de paciente
+        if self.paciente_no_registrado.data:
+            if not (self.nombre_no_reg.data and self.nombre_no_reg.data.strip()):
+                self.nombre_no_reg.errors.append('El nombre es requerido')
+                return False
+            if not (self.apellido_no_reg.data and self.apellido_no_reg.data.strip()):
+                self.apellido_no_reg.errors.append('El apellido es requerido')
+                return False
+        else:
+            if not self.paciente_id.data or self.paciente_id.data == 0:
+                self.paciente_id.errors.append('Debe seleccionar un paciente')
+                return False
         return True
 
 
 class PrestacionForm(FlaskForm):
     """Formulario para crear/editar prestaciones."""
     
+    prestacion_id = HiddenField(
+        'Prestacion ID',
+        validators=[Optional()]
+    )
+
     paciente_id = SelectField(
         'Paciente',
         coerce=int,
@@ -314,14 +351,22 @@ class GastoForm(FlaskForm):
     categoria = SelectField(
         'Categoría',
         choices=[
-            ('MATERIAL', 'Material'),
-            ('INSUMO', 'Insumo'),
-            ('MATRICULA', 'Matrícula'),
-            ('CURSO', 'Curso'),
-            ('OPERATIVO', 'Operativo'),
-            ('OTRO', 'Otro')
+            ('INSUMO', 'Insumos (incluye equipamiento)'),
+            ('OPERATIVO', 'Gasto Operativo (residuos patológicos)'),
+            ('CURSO', 'Curso/Capacitación'),
+            ('EJERCICIO_PROFESIONAL', 'Ejercicio Profesional (matrícula, jubilación, monotributo)'),
+            ('TECNICO_PROTESIS', 'Técnico prótesis'),
+            ('OTROS', 'Otros Gastos')
         ],
         validators=[DataRequired(message='Debe seleccionar una categoría')]
+    )
+
+    paciente_id = SelectField(
+        'Paciente relacionado',
+        coerce=int,
+        validators=[Optional()],
+        default=0,
+        choices=[(0, 'Sin paciente')]
     )
     
     observaciones = TextAreaField(
@@ -337,6 +382,17 @@ class GastoForm(FlaskForm):
             es_válido, mensaje = ValidadorGasto.validar_monto(field.data)
             if not es_válido:
                 raise ValidationError(mensaje)
+
+    def validate(self, extra_validators=None):
+        """Valida reglas cruzadas para gastos."""
+        if not super().validate(extra_validators=extra_validators):
+            return False
+
+        if self.categoria.data == 'TECNICO_PROTESIS' and (self.paciente_id.data or 0) == 0:
+            self.paciente_id.errors.append('Debe seleccionar un paciente para la categoría Técnico prótesis')
+            return False
+
+        return True
 
 
 class LoginForm(FlaskForm):
@@ -413,7 +469,7 @@ class PracticaForm(FlaskForm):
     obra_social_id = SelectField(
         'Obra Social',
         coerce=int,
-        validators=[DataRequired(message='Debe seleccionar una obra social')]
+        validators=[Optional()]
     )
     
     monto_unitario = DecimalField(
@@ -422,7 +478,13 @@ class PracticaForm(FlaskForm):
         validators=[
             DataRequired(message='El monto unitario es requerido'),
             NumberRange(min=0, message='El monto no puede ser negativo')
-        ]
+        ],
+        filters=[lambda x: x.replace('.', '').replace(',', '.') if isinstance(x, str) and x else x]
+    )
+    
+    es_plus = BooleanField(
+        'Es práctica PLUS (paga el paciente)',
+        default=False
     )
     
     submit = SubmitField('Guardar Práctica')

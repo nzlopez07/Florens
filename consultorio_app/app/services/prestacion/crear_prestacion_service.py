@@ -7,7 +7,7 @@ asociaciones PrestacionPractica.
 """
 
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 from app.database.session import DatabaseSession
 from app.models import Prestacion, Practica, PrestacionPractica, Paciente
 from app.services.common import (
@@ -38,7 +38,10 @@ class CrearPrestacionService:
             {
                 'paciente_id': int,                     # REQUERIDO
                 'descripcion': str,                     # REQUERIDO
-                'practicas': [int, int, ...],          # REQUERIDO - IDs de Practica
+                'practicas': [
+                    {'id': int, 'cantidad': int},
+                    ...
+                ],                                     # REQUERIDO - IDs de Practica con cantidad
                 'descuento_porcentaje': float,         # OPCIONAL (0-100), default 0
                 'descuento_fijo': float,               # OPCIONAL, default 0
                 'observaciones': str,                   # OPCIONAL
@@ -65,12 +68,9 @@ class CrearPrestacionService:
         if isinstance(descripcion, str):
             descripcion = descripcion.strip()
         
-        practicas_ids = data.get('practicas', [])
-        if not practicas_ids:
-            raise DatosInvalidosError('Debe seleccionar al menos una práctica')
-        
-        if not isinstance(practicas_ids, list):
-            raise DatosInvalidosError('practicas debe ser una lista de IDs')
+        practicas_ids, cantidades_por_id = CrearPrestacionService._normalize_practicas(
+            data.get('practicas', [])
+        )
         
         descuento_porcentaje = float(data.get('descuento_porcentaje', 0))
         descuento_fijo = float(data.get('descuento_fijo', 0))
@@ -106,7 +106,10 @@ class CrearPrestacionService:
             )
         
         # 5. Calcular subtotal
-        subtotal = sum(p.monto_unitario for p in practicas)
+        subtotal = sum(
+            (p.monto_unitario or 0) * cantidades_por_id.get(p.id, 1)
+            for p in practicas
+        )
         
         # 6. Aplicar descuento porcentaje (primero)
         monto = subtotal * (1 - descuento_porcentaje / 100)
@@ -130,9 +133,18 @@ class CrearPrestacionService:
         
         # 10. Crear PrestacionPractica entries para cada práctica
         for practica in practicas:
+            # Si es consulta (código 101), marcar como realizada automáticamente
+            es_consulta = practica.codigo == '101'
+            estado_item = 'realizado' if es_consulta else 'pendiente'
+            fecha_realizacion_item = prestacion.fecha_solicitud if es_consulta else None
+            
             pp = PrestacionPractica(
                 prestacion_id=prestacion.id,
                 practica_id=practica.id,
+                cantidad=cantidades_por_id.get(practica.id, 1),
+                monto_unitario=practica.monto_unitario,
+                estado_item=estado_item,
+                fecha_realizacion_item=fecha_realizacion_item,
             )
             session.add(pp)
         
@@ -143,7 +155,7 @@ class CrearPrestacionService:
     
     @staticmethod
     def calcular_monto_preview(
-        practicas_ids: List[int],
+        practicas: List[Any],
         descuento_porcentaje: float = 0,
         descuento_fijo: float = 0,
     ) -> Dict[str, float]:
@@ -153,7 +165,7 @@ class CrearPrestacionService:
         Útil para mostrar al usuario el desglose antes de confirmar.
         
         Args:
-            practicas_ids: Lista de IDs de prácticas
+            practicas: Lista de IDs o dicts {'id': int, 'cantidad': int}
             descuento_porcentaje: Descuento porcentual (0-100)
             descuento_fijo: Descuento fijo en monto
             
@@ -168,12 +180,17 @@ class CrearPrestacionService:
         """
         session = DatabaseSession.get_instance().session
         
+        practicas_ids, cantidades_por_id = CrearPrestacionService._normalize_practicas(practicas)
+
         # Query prácticas
-        practicas = session.query(Practica).filter(
+        practicas_db = session.query(Practica).filter(
             Practica.id.in_(practicas_ids)
         ).all()
         
-        subtotal = sum(p.monto_unitario for p in practicas)
+        subtotal = sum(
+            (p.monto_unitario or 0) * cantidades_por_id.get(p.id, 1)
+            for p in practicas_db
+        )
         descuento_porcentaje_monto = subtotal * (descuento_porcentaje / 100)
         monto_post_porcentaje = subtotal - descuento_porcentaje_monto
         total = max(0, monto_post_porcentaje - descuento_fijo)
@@ -184,3 +201,42 @@ class CrearPrestacionService:
             'descuento_fijo_aplicado': round(descuento_fijo, 2),
             'total': round(total, 2),
         }
+
+    @staticmethod
+    def _normalize_practicas(practicas_data: Any) -> Tuple[List[int], Dict[int, int]]:
+        """Normaliza la lista de prácticas aceptando IDs o dicts con cantidad."""
+        if not practicas_data:
+            raise DatosInvalidosError('Debe seleccionar al menos una práctica')
+
+        if not isinstance(practicas_data, list):
+            raise DatosInvalidosError('practicas debe ser una lista de IDs o diccionarios con cantidad')
+
+        practicas_ids: List[int] = []
+        cantidades_por_id: Dict[int, int] = {}
+
+        for item in practicas_data:
+            if isinstance(item, dict):
+                practica_id = item.get('id')
+                cantidad = item.get('cantidad', 1)
+            else:
+                practica_id = item
+                cantidad = 1
+
+            if practica_id is None:
+                raise DatosInvalidosError('Cada práctica debe incluir un id válido')
+
+            try:
+                practica_id_int = int(practica_id)
+            except (TypeError, ValueError):
+                raise DatosInvalidosError('ID de práctica inválido')
+
+            try:
+                cantidad_int = int(cantidad) if cantidad is not None else 1
+            except (TypeError, ValueError):
+                cantidad_int = 1
+
+            cantidad_segura = max(1, cantidad_int)
+            practicas_ids.append(practica_id_int)
+            cantidades_por_id[practica_id_int] = cantidad_segura
+
+        return practicas_ids, cantidades_por_id

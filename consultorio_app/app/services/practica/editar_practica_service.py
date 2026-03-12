@@ -55,16 +55,32 @@ class EditarPracticaService:
         
         # Código
         if 'codigo' in data:
-            codigo = data.get('codigo', '').strip().upper()
-            if codigo:
-                # Verificar que no exista otro con el mismo código
+            codigo_original = data.get('codigo', '').strip().upper()
+            if codigo_original:
+                # Obtener es_plus (mantener el valor actual si no se especifica)
+                es_plus = data.get('es_plus', practica.es_plus)
+                
+                # Si es plus, prefijar con 'plus_'
+                codigo = f'plus_{codigo_original}' if es_plus else codigo_original
+                
+                # Verificar que no exista otro con el mismo código en el mismo proveedor/obra_social
+                proveedor_tipo_actual = data.get('proveedor_tipo', practica.proveedor_tipo).strip().upper()
+                obra_social_id_actual = data.get('obra_social_id', practica.obra_social_id)
+                if not obra_social_id_actual or proveedor_tipo_actual == 'PARTICULAR':
+                    obra_social_id_actual = None
                 existe_otro = session.query(Practica).filter(
                     Practica.codigo == codigo,
+                    Practica.proveedor_tipo == proveedor_tipo_actual,
+                    Practica.obra_social_id == obra_social_id_actual,
                     Practica.id != practica_id
                 ).first()
                 if existe_otro:
-                    raise DatosInvalidosError(f'Ya existe otra práctica con código {codigo}')
+                    raise DatosInvalidosError(f'Ya existe otra práctica con código {codigo} para este proveedor')
                 practica.codigo = codigo
+        
+        # Es Plus (solo permitir cambio al crear, pero si se envía, actualizar)
+        if 'es_plus' in data:
+            practica.es_plus = data.get('es_plus', False)
         
         # Descripción
         if 'descripcion' in data:
@@ -97,6 +113,8 @@ class EditarPracticaService:
         # Obra social ID
         if 'obra_social_id' in data:
             obra_social_id = data.get('obra_social_id')
+            if not obra_social_id:
+                obra_social_id = None
             
             # Si es OBRA_SOCIAL, validar obra_social_id
             if practica.proveedor_tipo == 'OBRA_SOCIAL':

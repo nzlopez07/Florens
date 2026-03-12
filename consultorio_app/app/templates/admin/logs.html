@@ -26,7 +26,7 @@
         <div class="col-12">
             <div class="alert alert-info">
                 <strong>Archivo:</strong> {{ log_type }}.log | 
-                <strong>Tamaño:</strong> {{ "%.2f"|format(file_info.tamano / 1024) }} KB | 
+                <strong>Tamaño:</strong> {{ (file_info.tamano / 1024)|format_currency }} KB | 
                 <strong>Última modificación:</strong> {{ file_info.ultima_modificacion }} | 
                 <strong>Líneas mostradas:</strong> {{ log_lines|length }}
             </div>

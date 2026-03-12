@@ -15,6 +15,7 @@ from app.models import (
     Practica,
     Prestacion,
     PrestacionPractica,
+    PrestacionCobro,
 )
 
 
@@ -30,6 +31,11 @@ class ObtenerEstadisticasFinanzasService:
         """
         Obtiene resumen financiero con ingresos, egresos y balance.
         
+        Los ingresos ahora se calculan desde PrestacionCobro (lo efectivamente cobrado),
+        separando:
+        - Cobros a pacientes (de PrestacionCobro)
+        - Importes profesionales autorizados por obras sociales (pendientes de cobro a OS)
+        
         Args:
             fecha_desde: Fecha desde (opcional)
             fecha_hasta: Fecha hasta (opcional)
@@ -38,23 +44,42 @@ class ObtenerEstadisticasFinanzasService:
         Returns:
             Diccionario con resumen financiero
         """
-        # Calcular ingresos (de Prestaciones)
-        query_ingresos = db.session.query(
-            func.sum(Prestacion.monto).label('total')
-        )
+        # Calcular ingresos de cobros a pacientes (PrestacionCobro)
+        query_cobros_pacientes = db.session.query(
+            func.sum(PrestacionCobro.monto).label('total')
+        ).join(Prestacion, PrestacionCobro.prestacion_id == Prestacion.id)
         
-        filtros_ingresos = []
+        filtros_cobros = []
         if fecha_desde:
-            filtros_ingresos.append(func.date(Prestacion.fecha) >= fecha_desde)
+            filtros_cobros.append(PrestacionCobro.fecha_cobro >= fecha_desde)
         if fecha_hasta:
-            filtros_ingresos.append(func.date(Prestacion.fecha) <= fecha_hasta)
+            filtros_cobros.append(PrestacionCobro.fecha_cobro <= fecha_hasta)
         if paciente_id:
-            filtros_ingresos.append(Prestacion.paciente_id == paciente_id)
+            filtros_cobros.append(Prestacion.paciente_id == paciente_id)
         
-        if filtros_ingresos:
-            query_ingresos = query_ingresos.filter(and_(*filtros_ingresos))
+        if filtros_cobros:
+            query_cobros_pacientes = query_cobros_pacientes.filter(and_(*filtros_cobros))
         
-        total_ingresos = query_ingresos.scalar() or Decimal('0')
+        total_cobros_pacientes = query_cobros_pacientes.scalar() or Decimal('0')
+        
+        # Calcular ingresos por cobrar a obras sociales (importe_profesional_autorizado)
+        # de prestaciones autorizadas en el período
+        query_os = db.session.query(
+            func.sum(Prestacion.importe_profesional_autorizado).label('total')
+        ).filter(Prestacion.fecha_autorizacion.isnot(None))
+        
+        filtros_os = []
+        if fecha_desde:
+            filtros_os.append(Prestacion.fecha_autorizacion >= fecha_desde)
+        if fecha_hasta:
+            filtros_os.append(Prestacion.fecha_autorizacion <= fecha_hasta)
+        if paciente_id:
+            filtros_os.append(Prestacion.paciente_id == paciente_id)
+        
+        if filtros_os:
+            query_os = query_os.filter(and_(*filtros_os))
+        
+        total_pendiente_os = query_os.scalar() or Decimal('0')
         
         # Calcular egresos (de Gastos)
         query_egresos = db.session.query(
@@ -73,13 +98,19 @@ class ObtenerEstadisticasFinanzasService:
         total_egresos = query_egresos.scalar() or Decimal('0')
         
         # Calcular balance
-        # Asegurar tipos Decimal para evitar mezclas float/Decimal
-        total_ingresos = Decimal(total_ingresos)
+        # Total ingresos = solo cobros de pacientes (prácticas PLUS efectivamente cobradas)
+        # Los pendientes de OS NO son ingresos directos de la doctora
+        total_cobros_pacientes = Decimal(total_cobros_pacientes)
+        total_pendiente_os = Decimal(total_pendiente_os)
         total_egresos = Decimal(total_egresos)
+        
+        total_ingresos = total_cobros_pacientes  # Solo cobros efectivos
         balance = total_ingresos - total_egresos
         
         return {
             'ingresos': float(total_ingresos),
+            'ingresos_pacientes': float(total_cobros_pacientes),
+            'ingresos_os_pendiente': float(total_pendiente_os),  # Se mantiene para referencia
             'egresos': float(total_egresos),
             'balance': float(balance),
             'fecha_desde': fecha_desde,
@@ -92,41 +123,51 @@ class ObtenerEstadisticasFinanzasService:
         fecha_hasta: Optional[date] = None
     ) -> List[Dict]:
         """
-        Obtiene ingresos agrupados por Obra Social (fuente de pago).
+        Obtiene ingresos agrupados por tipo de cobro (método de pago).
+        
+        Usa PrestacionCobro.tipo_cobro para agrupar por: 
+        transferencia, efectivo, débito, crédito, otros.
         
         Args:
             fecha_desde: Fecha desde (opcional)
             fecha_hasta: Fecha hasta (opcional)
             
         Returns:
-            Lista de diccionarios con fuente y total
+            Lista de diccionarios con tipo_cobro y total
         """
         query = db.session.query(
-            func.coalesce(ObraSocial.nombre, 'Particular').label('fuente'),
-            func.sum(Prestacion.monto).label('total'),
-            func.count(Prestacion.id).label('cantidad')
-        ).join(Paciente, Prestacion.paciente_id == Paciente.id)
-        query = query.outerjoin(ObraSocial, Paciente.obra_social_id == ObraSocial.id)
-        query = query.group_by('fuente')
+            PrestacionCobro.tipo_cobro.label('tipo'),
+            func.sum(PrestacionCobro.monto).label('total'),
+            func.count(PrestacionCobro.id).label('cantidad')
+        ).group_by(PrestacionCobro.tipo_cobro)
         
         filtros = []
         if fecha_desde:
-            filtros.append(func.date(Prestacion.fecha) >= fecha_desde)
+            filtros.append(PrestacionCobro.fecha_cobro >= fecha_desde)
         if fecha_hasta:
-            filtros.append(func.date(Prestacion.fecha) <= fecha_hasta)
+            filtros.append(PrestacionCobro.fecha_cobro <= fecha_hasta)
         
         if filtros:
             query = query.filter(and_(*filtros))
         
         resultados = query.all()
         
+        # Mapear nombres amigables
+        tipo_nombres = {
+            'transferencia': 'Transferencia',
+            'efectivo': 'Efectivo',
+            'debito': 'Débito',
+            'credito': 'Crédito',
+            'otros': 'Otros'
+        }
+        
         return [
             {
-                'fuente': fuente,
+                'fuente': tipo_nombres.get(tipo, tipo.capitalize() if tipo else 'Sin especificar'),
                 'total': float(total),
                 'cantidad': cantidad
             }
-            for fuente, total, cantidad in resultados
+            for tipo, total, cantidad in resultados
         ]
 
     @staticmethod
@@ -136,10 +177,10 @@ class ObtenerEstadisticasFinanzasService:
         fecha_hasta: Optional[date] = None
     ) -> List[Dict]:
         """
-        Obtiene ingresos agrupados por práctica (código + descripción) para una obra social.
+        Obtiene ingresos agrupados por práctica (código + descripción).
 
-        Distribuye el monto de cada prestación proporcionalmente por cantidad de prácticas
-        asociadas para no desbalancear el total de ingresos.
+        Calcula el monto real basándose en PrestacionCobro (lo efectivamente cobrado),
+        considerando solo prácticas PLUS que son los ingresos reales de la doctora.
 
         Args:
             obra_social: Nombre de la obra social ("Particular" considera pacientes sin obra social)
@@ -150,67 +191,68 @@ class ObtenerEstadisticasFinanzasService:
             Lista de diccionarios con código, descripción, cantidad y total
         """
         session = db.session
-
-        total_practicas_window = func.sum(PrestacionPractica.cantidad).over(
-            partition_by=Prestacion.id
-        ).label('total_practicas')
-
+        
+        # Agrupar por práctica desde PrestacionCobro (lo efectivamente cobrado)
+        # Necesitamos asociar cada cobro con las prácticas PLUS de esa prestación
         query = session.query(
-            Prestacion.id.label('prestacion_id'),
-            Prestacion.monto.label('monto_prestacion'),
-            PrestacionPractica.cantidad.label('cantidad_practica'),
-            total_practicas_window,
             Practica.codigo.label('codigo'),
-            Practica.descripcion.label('descripcion')
-        ).join(Paciente, Prestacion.paciente_id == Paciente.id)
-        query = query.outerjoin(ObraSocial, Paciente.obra_social_id == ObraSocial.id)
+            Practica.descripcion.label('descripcion'),
+            func.count(PrestacionCobro.id).label('cantidad_cobros'),
+            func.sum(PrestacionCobro.monto).label('monto_total')
+        ).join(Prestacion, PrestacionCobro.prestacion_id == Prestacion.id)
         query = query.join(PrestacionPractica, PrestacionPractica.prestacion_id == Prestacion.id)
         query = query.join(Practica, PrestacionPractica.practica_id == Practica.id)
-
+        query = query.join(Paciente, Prestacion.paciente_id == Paciente.id)
+        query = query.outerjoin(ObraSocial, Paciente.obra_social_id == ObraSocial.id)
+        
+        # Solo contar prácticas no anuladas
+        query = query.filter(PrestacionPractica.fecha_anulacion.is_(None))
+        
         filtros = []
+        
+        # Filtrar por fecha de cobro (lo que realmente importa)
         if fecha_desde:
-            filtros.append(func.date(Prestacion.fecha) >= fecha_desde)
+            filtros.append(PrestacionCobro.fecha_cobro >= fecha_desde)
         if fecha_hasta:
-            filtros.append(func.date(Prestacion.fecha) <= fecha_hasta)
+            filtros.append(PrestacionCobro.fecha_cobro <= fecha_hasta)
 
+        # Filtrar por obra social si se especifica
         if obra_social and obra_social.lower() not in ('todas', 'todo'):
             if obra_social.lower() == 'particular':
+                # Solo prácticas PLUS para particulares
+                filtros.append(Practica.es_plus == True)
                 filtros.append(or_(ObraSocial.nombre == 'Particular', ObraSocial.id.is_(None)))
             else:
+                # Para obras sociales específicas, solo prácticas NO-PLUS
+                filtros.append(Practica.es_plus == False)
                 filtros.append(func.lower(ObraSocial.nombre) == obra_social.lower())
-
+        else:
+            # Cuando es "Todo", solo mostrar prácticas PLUS (ingresos reales de la doctora)
+            # Las prácticas de obra social NO son ingresos directos
+            filtros.append(Practica.es_plus == True)
+        
         if filtros:
             query = query.filter(and_(*filtros))
+        
+        query = query.group_by(Practica.codigo, Practica.descripcion)
 
         resultados = query.all()
-
-        acumulado: Dict[str, Dict[str, float]] = {}
+        
+        practicas_data = []
         for row in resultados:
-            total_practicas = row.total_practicas or 0
-            cantidad_practica = row.cantidad_practica or 0
-            if total_practicas == 0:
-                monto_practica = 0
-            else:
-                monto_practica = (row.monto_prestacion or 0) * (cantidad_practica / total_practicas)
-
             codigo = row.codigo or 'Sin código'
             descripcion = row.descripcion or 'Sin descripción'
-            etiqueta = f"{codigo} - {descripcion}"
+            
+            practicas_data.append({
+                'codigo': codigo,
+                'descripcion': descripcion,
+                'cantidad': int(row.cantidad_cobros or 0),
+                'total': float(row.monto_total or 0)
+            })
 
-            if etiqueta not in acumulado:
-                acumulado[etiqueta] = {
-                    'codigo': codigo,
-                    'descripcion': descripcion,
-                    'cantidad': 0,
-                    'total': 0.0,
-                }
-
-            acumulado[etiqueta]['cantidad'] += cantidad_practica
-            acumulado[etiqueta]['total'] += float(monto_practica)
-
-        # Ordenar por total desc para una lectura rápida
+        # Ordenar por total desc
         return sorted(
-            acumulado.values(),
+            practicas_data,
             key=lambda x: x['total'],
             reverse=True
         )
@@ -266,6 +308,10 @@ class ObtenerEstadisticasFinanzasService:
         """
         Obtiene detalle de prestaciones individuales para una obra social.
         
+        Ahora muestra montos reales:
+        - Total cobrado al paciente (suma de PrestacionCobro)
+        - Importe profesional autorizado (a cobrar de OS)
+        
         Args:
             obra_social: Nombre de la obra social (opcional)
             fecha_desde: Fecha desde (opcional)
@@ -277,8 +323,11 @@ class ObtenerEstadisticasFinanzasService:
         """
         query = db.session.query(
             Prestacion.id,
-            Prestacion.fecha,
-            Prestacion.monto,
+            Prestacion.fecha_solicitud,
+            Prestacion.fecha_autorizacion,
+            Prestacion.estado,
+            Prestacion.importe_afiliado_autorizado,
+            Prestacion.importe_profesional_autorizado,
             Paciente.nombre.label('paciente_nombre'),
             Paciente.apellido.label('paciente_apellido'),
             func.coalesce(ObraSocial.nombre, 'Particular').label('obra_social_nombre')
@@ -287,9 +336,19 @@ class ObtenerEstadisticasFinanzasService:
         
         filtros = []
         if fecha_desde:
-            filtros.append(func.date(Prestacion.fecha) >= fecha_desde)
+            filtros.append(
+                or_(
+                    Prestacion.fecha_autorizacion >= fecha_desde,
+                    Prestacion.fecha_solicitud >= fecha_desde
+                )
+            )
         if fecha_hasta:
-            filtros.append(func.date(Prestacion.fecha) <= fecha_hasta)
+            filtros.append(
+                or_(
+                    Prestacion.fecha_autorizacion <= fecha_hasta,
+                    Prestacion.fecha_solicitud <= fecha_hasta
+                )
+            )
         
         if obra_social and obra_social.lower() not in ('todas', 'todo'):
             if obra_social.lower() == 'particular':
@@ -300,32 +359,47 @@ class ObtenerEstadisticasFinanzasService:
         if filtros:
             query = query.filter(and_(*filtros))
         
-        query = query.order_by(Prestacion.fecha.desc()).limit(limite)
+        query = query.order_by(Prestacion.fecha_solicitud.desc()).limit(limite)
         resultados = query.all()
         
-        # Obtener prácticas asociadas a cada prestación
+        # Obtener prácticas y cobros asociados a cada prestación
         prestaciones_detalle = []
         for row in resultados:
-            # Obtener prácticas de esta prestación
+            # Obtener prácticas de esta prestación (solo PLUS para pacientes)
             practicas_query = db.session.query(
                 Practica.codigo,
                 Practica.descripcion,
+                Practica.es_plus,
                 PrestacionPractica.cantidad
             ).join(PrestacionPractica, Practica.id == PrestacionPractica.practica_id)
-            practicas_query = practicas_query.filter(PrestacionPractica.prestacion_id == row.id)
+            practicas_query = practicas_query.filter(
+                PrestacionPractica.prestacion_id == row.id,
+                PrestacionPractica.fecha_anulacion.is_(None)
+            )
             practicas = practicas_query.all()
             
             # Formatear prácticas como string
             practicas_str = ', '.join([
-                f"{p.codigo} ({p.cantidad})" for p in practicas
+                f"{p.codigo} ({p.cantidad})" + (' [PLUS]' if p.es_plus else '')
+                for p in practicas
             ])
+            
+            # Obtener total cobrado al paciente
+            total_cobrado = db.session.query(
+                func.sum(PrestacionCobro.monto)
+            ).filter(
+                PrestacionCobro.prestacion_id == row.id
+            ).scalar() or 0
             
             prestaciones_detalle.append({
                 'id': row.id,
-                'fecha': row.fecha,
+                'fecha': row.fecha_autorizacion or row.fecha_solicitud,
+                'estado': row.estado,
                 'paciente': f"{row.paciente_nombre} {row.paciente_apellido}",
                 'practicas': practicas_str,
-                'monto': float(row.monto),
+                'monto_paciente': float(row.importe_afiliado_autorizado or 0),
+                'cobrado_paciente': float(total_cobrado),
+                'monto_os': float(row.importe_profesional_autorizado or 0),
                 'obra_social': row.obra_social_nombre
             })
         

@@ -17,6 +17,30 @@ from app.models import ObraSocial, Paciente
 finanzas_bp = Blueprint('finanzas', __name__, url_prefix='/finanzas')
 
 
+def _cargar_pacientes_en_form(form: GastoForm):
+    """Carga opciones de pacientes para el formulario de gastos."""
+    pacientes = Paciente.query.order_by(Paciente.apellido.asc(), Paciente.nombre.asc()).all()
+    form.paciente_id.choices = [(0, 'Sin paciente')] + [
+        (p.id, f'{p.apellido}, {p.nombre}')
+        for p in pacientes
+    ]
+
+
+def _obtener_mapa_pacientes_desde_gastos(gastos_lista):
+    """Construye un mapa id->paciente con los ids embebidos en observaciones."""
+    paciente_ids = set()
+    for gasto in gastos_lista:
+        paciente_id = CrearGastoService.extraer_paciente_id(gasto.observaciones)
+        if paciente_id:
+            paciente_ids.add(paciente_id)
+
+    if not paciente_ids:
+        return {}
+
+    pacientes = Paciente.query.filter(Paciente.id.in_(paciente_ids)).all()
+    return {p.id: p for p in pacientes}
+
+
 def duena_required(f):
     """Decorador para requerir rol DUEÑA."""
     @wraps(f)
@@ -159,9 +183,16 @@ def gastos():
         fecha_hasta=fecha_hasta,
         categoria=categoria
     )
+
+    pacientes_por_id = _obtener_mapa_pacientes_desde_gastos(gastos_lista)
+    for gasto in gastos_lista:
+        paciente_id = CrearGastoService.extraer_paciente_id(gasto.observaciones)
+        paciente = pacientes_por_id.get(paciente_id)
+        gasto.paciente_relacionado = paciente
+        gasto.observaciones_limpias = CrearGastoService.limpiar_observaciones(gasto.observaciones)
     
     # Categorías disponibles
-    categorias = ['MATERIAL', 'INSUMO', 'MATRICULA', 'CURSO', 'OPERATIVO', 'OTRO']
+    categorias = ['INSUMO', 'OPERATIVO', 'CURSO', 'EJERCICIO_PROFESIONAL', 'TECNICO_PROTESIS', 'OTROS']
     
     return render_template(
         'finanzas/gastos.html',
@@ -179,6 +210,7 @@ def gastos():
 def nuevo_gasto():
     """Crear nuevo gasto con validación WTF."""
     form = GastoForm()
+    _cargar_pacientes_en_form(form)
     
     if form.validate_on_submit():
         try:
@@ -189,7 +221,8 @@ def nuevo_gasto():
                 fecha=form.fecha.data,
                 categoria=form.categoria.data,
                 creado_por_id=current_user.id,
-                observaciones=form.observaciones.data or None
+                observaciones=form.observaciones.data or None,
+                paciente_id=(form.paciente_id.data or None) if form.paciente_id.data != 0 else None,
             )
             
             flash(f'Gasto "{gasto.descripcion}" creado exitosamente', 'success')
@@ -200,7 +233,46 @@ def nuevo_gasto():
         except Exception as e:
             flash(f'Error inesperado: {str(e)}', 'danger')
     
-    return render_template('finanzas/nuevo_gasto.html', form=form)
+    return render_template('finanzas/nuevo_gasto.html', form=form, es_edicion=False)
+
+
+@finanzas_bp.route('/gastos/<int:gasto_id>/editar', methods=['GET', 'POST'])
+@login_required
+@duena_required
+def editar_gasto(gasto_id):
+    """Permite editar un gasto existente."""
+    gasto = ListarGastosService.obtener_por_id(gasto_id)
+    if not gasto:
+        flash('Gasto no encontrado', 'danger')
+        return redirect(url_for('finanzas.gastos'))
+
+    form = GastoForm(obj=gasto)
+    _cargar_pacientes_en_form(form)
+
+    if request.method == 'GET':
+        paciente_id = CrearGastoService.extraer_paciente_id(gasto.observaciones) or 0
+        form.paciente_id.data = paciente_id
+        form.observaciones.data = CrearGastoService.limpiar_observaciones(gasto.observaciones)
+
+    if form.validate_on_submit():
+        try:
+            gasto_actualizado = CrearGastoService.actualizar(
+                gasto_id=gasto.id,
+                descripcion=form.descripcion.data,
+                monto=form.monto.data,
+                fecha=form.fecha.data,
+                categoria=form.categoria.data,
+                observaciones=form.observaciones.data or None,
+                paciente_id=(form.paciente_id.data or None) if form.paciente_id.data != 0 else None,
+            )
+            flash(f'Gasto "{gasto_actualizado.descripcion}" actualizado exitosamente', 'success')
+            return redirect(url_for('finanzas.gastos'))
+        except OdontoAppError as e:
+            flash(f'Error: {e.mensaje}', 'danger')
+        except Exception as e:
+            flash(f'Error inesperado: {str(e)}', 'danger')
+
+    return render_template('finanzas/nuevo_gasto.html', form=form, es_edicion=True, gasto=gasto)
 
 
 @finanzas_bp.route('/reportes')

@@ -40,7 +40,63 @@
         <form method="post" novalidate>
             {{ form.hidden_tag() }}
             <div class="row g-3">
-                {{ render_field(form.paciente_id) }}
+                <!-- Toggle paciente no registrado -->
+                <div class="col-12">
+                    <div class="form-check form-switch">
+                        {{ form.paciente_no_registrado(class="form-check-input", id="paciente_no_registrado", role="switch") }}
+                        <label class="form-check-label" for="paciente_no_registrado">
+                            Paciente no registrado (ingresarlo manualmente)
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Selector de paciente registrado -->
+                <div id="campo_paciente_registrado" class="col-md-6">
+                    {{ form.paciente_id.label(class="form-label") }}
+                    <div class="autocomplete-wrapper" style="position: relative;">
+                        <input type="text"
+                               class="form-control autocomplete-input"
+                               id="paciente_id_search"
+                               placeholder="Escribir nombre del paciente..."
+                               autocomplete="off">
+                        {{ form.paciente_id(class="d-none", id="paciente_id") }}
+                        <div class="autocomplete-list" style="position: absolute; z-index: 1000; width: 100%; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ced4da; border-top: none; display: none; border-radius: 0 0 0.25rem 0.25rem;"></div>
+                    </div>
+                    {% if form.paciente_id.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.paciente_id.errors %}<div>{{ error }}</div>{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Campos para paciente no registrado -->
+                <div id="campos_no_registrado" class="col-12 d-none">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            {{ form.nombre_no_reg.label(class="form-label") }}
+                            {{ form.nombre_no_reg(class="form-control" + (" is-invalid" if form.nombre_no_reg.errors else ""), placeholder="Nombre") }}
+                            {% if form.nombre_no_reg.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.nombre_no_reg.errors %}<div>{{ error }}</div>{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.apellido_no_reg.label(class="form-label") }}
+                            {{ form.apellido_no_reg(class="form-control" + (" is-invalid" if form.apellido_no_reg.errors else ""), placeholder="Apellido") }}
+                            {% if form.apellido_no_reg.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.apellido_no_reg.errors %}<div>{{ error }}</div>{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.telefono_no_reg.label(class="form-label") }}
+                            {{ form.telefono_no_reg(class="form-control", placeholder="Teléfono (opcional)") }}
+                        </div>
+                    </div>
+                </div>
+
                 {{ render_field(form.fecha) }}
                 {{ render_field(form.hora) }}
                 <div class="col-md-6">
@@ -188,6 +244,27 @@ document.addEventListener('DOMContentLoaded', function() {
     // Aplicar autocomplete a paciente
     const pacienteSelect = document.getElementById('paciente_id');
     if (pacienteSelect) setupAutocomplete(pacienteSelect);
+
+    // Toggle paciente no registrado
+    const toggleNoReg = document.getElementById('paciente_no_registrado');
+    const campoRegistrado = document.getElementById('campo_paciente_registrado');
+    const camposNoReg = document.getElementById('campos_no_registrado');
+
+    function actualizarVisibilidadPaciente() {
+        if (toggleNoReg.checked) {
+            campoRegistrado.classList.add('d-none');
+            camposNoReg.classList.remove('d-none');
+        } else {
+            campoRegistrado.classList.remove('d-none');
+            camposNoReg.classList.add('d-none');
+        }
+    }
+
+    if (toggleNoReg) {
+        toggleNoReg.addEventListener('change', actualizarVisibilidadPaciente);
+        // Restaurar estado en caso de error de validación
+        actualizarVisibilidadPaciente();
+    }
 });
 </script>
 {% endblock %}

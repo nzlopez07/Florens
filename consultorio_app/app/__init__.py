@@ -133,6 +133,47 @@ def create_app():
             return default
         return value
     
+    @app.template_filter('format_currency')
+    def format_currency(value):
+        """
+        Formatea un número al estilo argentino: 10000.50 → 10.000,50
+        - Separador de miles: punto (.)
+        - Separador decimal: coma (,)
+        - Siempre 2 decimales
+        
+        Maneja None, strings, y números.
+        """
+        try:
+            # Convertir a float si es string
+            if isinstance(value, str):
+                value = float(value.replace('.', '').replace(',', '.'))
+            
+            # Si es None, retornar 0,00
+            if value is None:
+                value = 0.0
+            
+            # Asegurar que sea float
+            value = float(value)
+            
+            # Separar parte entera y decimal
+            partes = str(abs(value)).split('.')
+            parte_entera = partes[0]
+            parte_decimal = partes[1][:2].ljust(2, '0') if len(partes) > 1 else '00'
+            
+            # Agregar separador de miles (punto)
+            parte_entera_formateada = ''
+            for i, digito in enumerate(reversed(parte_entera)):
+                if i > 0 and i % 3 == 0:
+                    parte_entera_formateada = '.' + parte_entera_formateada
+                parte_entera_formateada = digito + parte_entera_formateada
+            
+            # Agregar signo negativo si corresponde
+            signo = '-' if value < 0 else ''
+            
+            return f"{signo}{parte_entera_formateada},{parte_decimal}"
+        except (ValueError, TypeError, AttributeError):
+            return "0,00"
+    
     # Inyectar variables globales en todos los templates
     @app.context_processor
     def inject_globals():

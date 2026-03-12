@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, UniqueConstraint, Boolean, Date
 from sqlalchemy.orm import relationship
 from app.database import db
 
@@ -11,6 +11,12 @@ class Practica(db.Model):
     proveedor_tipo = Column(String(20), nullable=False)
     obra_social_id = Column(Integer, ForeignKey("obras_sociales.id"), nullable=True)
     monto_unitario = Column(Float, nullable=False, default=0.0)
+    es_plus = Column(Boolean, nullable=False, default=False)  # Indica si es un "plus" que paga el paciente
+    
+    # NUEVOS CAMPOS BAJA LÓGICA
+    activa = Column(Boolean, nullable=False, default=True)
+    fecha_baja = Column(Date, nullable=True)
+    razon_baja = Column(String(255), nullable=True)
 
     obra_social = relationship("ObraSocial", back_populates="practicas", foreign_keys=[obra_social_id])
     prestaciones_assoc = relationship("PrestacionPractica", back_populates="practica")

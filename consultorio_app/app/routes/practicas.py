@@ -22,15 +22,18 @@ def listar_practicas():
     proveedor_filter = request.args.get('proveedor', '').strip()
     
     if proveedor_filter == 'IPSS':
-        ipss = ObraSocial.query.filter_by(nombre='IPSS').first()
+        ipss = ObraSocial.query.filter(ObraSocial.nombre.ilike('%IPSS%')).first()
         obra_social_id = ipss.id if ipss else None
         practicas = ListarPracticasService.listar_por_proveedor(obra_social_id) if obra_social_id else []
         titulo = 'IPSS'
     elif proveedor_filter == 'SANCOR':
-        sancor = ObraSocial.query.filter_by(nombre='SANCOR SALUD').first()
+        sancor = ObraSocial.query.filter(ObraSocial.nombre.ilike('%SANCOR%')).first()
         obra_social_id = sancor.id if sancor else None
         practicas = ListarPracticasService.listar_por_proveedor(obra_social_id) if obra_social_id else []
         titulo = 'SANCOR SALUD'
+    elif proveedor_filter == 'Particular':
+        practicas = ListarPracticasService.listar_por_proveedor()
+        titulo = 'Particular'
     else:
         practicas = ListarPracticasService.listar_por_proveedor()
         titulo = 'Particular'
@@ -44,21 +47,30 @@ def crear_practica():
     form = PracticaForm()
     
     # Populate dynamic choices
-    obras_sociales = ObraSocial.query.all()
-    form.obra_social_id.choices = [(0, 'Seleccionar...')] + [(o.id, o.nombre) for o in obras_sociales]
+    obras_sociales = ObraSocial.query.filter(~ObraSocial.nombre.ilike('%PARTICULAR%')).all()
+    form.obra_social_id.choices = [(0, 'PARTICULAR (sin obra social)')] + [(o.id, o.nombre) for o in obras_sociales]
     
     if form.validate_on_submit():
         try:
             # Determinar proveedor_tipo automáticamente según obra social seleccionada
             obra_social_id = form.obra_social_id.data if form.obra_social_id.data else None
             proveedor_tipo = 'OBRA_SOCIAL' if obra_social_id else 'PARTICULAR'
+
+            # Compatibilidad: si por algún motivo llega una obra social llamada PARTICULAR,
+            # tratarla como práctica particular real.
+            if obra_social_id:
+                os_sel = ObraSocial.query.get(obra_social_id)
+                if os_sel and 'PARTICULAR' in (os_sel.nombre or '').upper():
+                    obra_social_id = None
+                    proveedor_tipo = 'PARTICULAR'
             
             practica = CrearPracticaService.execute({
                 'codigo': form.codigo.data,
                 'descripcion': form.descripcion.data,
                 'proveedor_tipo': proveedor_tipo,
                 'obra_social_id': obra_social_id,
-                'monto_unitario': float(form.monto_unitario.data)
+                'monto_unitario': float(form.monto_unitario.data),
+                'es_plus': form.es_plus.data
             })
             flash('Práctica creada exitosamente', 'success')
             return redirect(url_for('main.listar_practicas'))
@@ -80,21 +92,28 @@ def editar_practica(id: int):
         return redirect(url_for('main.listar_practicas'))
     
     form = PracticaForm()
-    obras_sociales = ObraSocial.query.all()
-    form.obra_social_id.choices = [(0, 'Seleccionar...')] + [(o.id, o.nombre) for o in obras_sociales]
+    obras_sociales = ObraSocial.query.filter(~ObraSocial.nombre.ilike('%PARTICULAR%')).all()
+    form.obra_social_id.choices = [(0, 'PARTICULAR (sin obra social)')] + [(o.id, o.nombre) for o in obras_sociales]
     
     if form.validate_on_submit():
         try:
             # Determinar proveedor_tipo automáticamente según obra social seleccionada
             obra_social_id = form.obra_social_id.data if form.obra_social_id.data else None
             proveedor_tipo = 'OBRA_SOCIAL' if obra_social_id else 'PARTICULAR'
+
+            if obra_social_id:
+                os_sel = ObraSocial.query.get(obra_social_id)
+                if os_sel and 'PARTICULAR' in (os_sel.nombre or '').upper():
+                    obra_social_id = None
+                    proveedor_tipo = 'PARTICULAR'
             
             practica = EditarPracticaService.execute(id, {
                 'codigo': form.codigo.data,
                 'descripcion': form.descripcion.data,
                 'proveedor_tipo': proveedor_tipo,
                 'obra_social_id': obra_social_id,
-                'monto_unitario': float(form.monto_unitario.data)
+                'monto_unitario': float(form.monto_unitario.data),
+                'es_plus': form.es_plus.data
             })
             flash('Práctica actualizada exitosamente', 'success')
             return redirect(url_for('main.listar_practicas'))
@@ -106,10 +125,16 @@ def editar_practica(id: int):
             flash(f'Error al actualizar práctica: {str(e)}', 'error')
     elif request.method == 'GET':
         # Pre-populate form on GET
-        form.codigo.data = practica.codigo
+        # Extraer código original si es plus
+        codigo_display = practica.codigo
+        if practica.es_plus and codigo_display.startswith('plus_'):
+            codigo_display = codigo_display[5:]  # Remover 'plus_' prefix
+        
+        form.codigo.data = codigo_display
         form.descripcion.data = practica.descripcion
         form.obra_social_id.data = practica.obra_social_id or 0
         form.monto_unitario.data = practica.monto_unitario
+        form.es_plus.data = practica.es_plus
     
     return render_template('practicas/formulario.html', form=form, practica=practica, obras_sociales=obras_sociales)
 
@@ -118,13 +143,15 @@ def editar_practica(id: int):
 @login_required
 def eliminar_practica(id: int):
     try:
-        resultado = EliminarPracticaService.execute(id)
+        # Obtener razón opcional del formulario
+        razon = request.form.get('razon', '').strip() or None
+        resultado = EliminarPracticaService.execute(id, razon=razon)
         flash(resultado['mensaje'], 'success')
     except PracticaNoEncontradaError as e:
         flash(str(e), 'error')
-    except PracticaConDependenciasError as e:
+    except DatosInvalidosError as e:
         flash(str(e), 'error')
     except Exception as e:
-        flash(f'Error al eliminar práctica: {str(e)}', 'error')
+        flash(f'Error al dar de baja práctica: {str(e)}', 'error')
     
     return redirect(url_for('main.listar_practicas'))

@@ -78,9 +78,11 @@
                             <th>Fecha</th>
                             <th>Descripción</th>
                             <th>Categoría</th>
+                            <th>Paciente</th>
                             <th class="text-end">Monto</th>
                             <th>Observaciones</th>
                             <th>Creado por</th>
+                            <th class="text-end">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -97,22 +99,31 @@
                             </td>
                             <td>
                                 <span class="badge 
-                                    {% if gasto.categoria == 'MATERIAL' %}bg-primary
-                                    {% elif gasto.categoria == 'INSUMO' %}bg-info
-                                    {% elif gasto.categoria == 'MATRICULA' %}bg-warning
+                                    {% if gasto.categoria == 'INSUMO' %}bg-info
                                     {% elif gasto.categoria == 'CURSO' %}bg-success
                                     {% elif gasto.categoria == 'OPERATIVO' %}bg-secondary
+                                    {% elif gasto.categoria == 'EJERCICIO_PROFESIONAL' %}bg-warning text-dark
+                                    {% elif gasto.categoria == 'TECNICO_PROTESIS' %}bg-primary
                                     {% else %}bg-dark
                                     {% endif %}">
-                                    {{ gasto.categoria }}
+                                    {{ gasto.categoria_display }}
                                 </span>
                             </td>
+                            <td>
+                                {% if gasto.paciente_relacionado %}
+                                <small>
+                                    {{ gasto.paciente_relacionado.apellido }}, {{ gasto.paciente_relacionado.nombre }}
+                                </small>
+                                {% else %}
+                                <small class="text-muted">-</small>
+                                {% endif %}
+                            </td>
                             <td class="text-end">
-                                <strong>${{ "{:,.2f}".format(gasto.monto) }}</strong>
+                                <strong>{{ gasto.monto|format_currency }}</strong>
                             </td>
                             <td>
-                                {% if gasto.observaciones %}
-                                <small>{{ gasto.observaciones[:50] }}{% if gasto.observaciones|length > 50 %}...{% endif %}</small>
+                                {% if gasto.observaciones_limpias %}
+                                <small>{{ gasto.observaciones_limpias[:50] }}{% if gasto.observaciones_limpias|length > 50 %}...{% endif %}</small>
                                 {% else %}
                                 <small class="text-muted">-</small>
                                 {% endif %}
@@ -123,16 +134,21 @@
                                     <span class="text-muted">{{ gasto.fecha_creacion.strftime('%d/%m/%Y %H:%M') }}</span>
                                 </small>
                             </td>
+                            <td class="text-end">
+                                <a href="{{ url_for('finanzas.editar_gasto', gasto_id=gasto.id) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-pen"></i> Editar
+                                </a>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                     <tfoot>
                         <tr class="table-active">
-                            <td colspan="3"><strong>TOTAL</strong></td>
+                            <td colspan="4"><strong>TOTAL</strong></td>
                             <td class="text-end">
-                                <strong>${{ "{:,.2f}".format(gastos|sum(attribute='monto')) }}</strong>
+                                <strong>{{ gastos|sum(attribute='monto')|format_currency }}</strong>
                             </td>
-                            <td colspan="2"></td>
+                            <td colspan="3"></td>
                         </tr>
                     </tfoot>
                 </table>

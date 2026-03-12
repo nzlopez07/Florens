@@ -1,0 +1,522 @@
+{% extends "base.html" %}
+
+{% block title %}Prestación - {{ prestacion.descripcion }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h4 class="mb-0"><i class="bi bi-clipboard-data"></i> Detalles de Prestación</h4>
+        <small class="text-muted">{{ prestacion.descripcion }}</small>
+    </div>
+    <div class="d-flex gap-2">
+        {% if prestacion.estado == 'borrador' %}
+        <a class="btn btn-primary" href="{{ url_for('main.editar_prestacion', prestacion_id=prestacion.id) }}">
+            <i class="bi bi-pencil-square"></i> Editar borrador
+        </a>
+        <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalEliminarPrestacion">
+            <i class="bi bi-trash"></i> Eliminar
+        </button>
+        {% endif %}
+        <a class="btn btn-outline-secondary" href="{{ url_for('main.listar_prestaciones_paciente', paciente_id=prestacion.paciente_id) }}">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+    </div>
+</div>
+
+<!-- Estado de la Prestación -->
+<div class="card mb-3">
+    <div class="card-header">
+        <h6 class="mb-0"><i class="bi bi-info-circle"></i> Información General</h6>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>Paciente:</strong> {{ prestacion.paciente.apellido }}, {{ prestacion.paciente.nombre }}</p>
+                <p><strong>Descripción:</strong> {{ prestacion.descripcion }}</p>
+                <p><strong>Monto:</strong> {{ prestacion.monto|format_currency }}</p>
+                <p><strong>Fecha de Solicitud:</strong> {{ prestacion.fecha_solicitud.strftime('%d/%m/%Y') if prestacion.fecha_solicitud else 'N/A' }}</p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>Estado:</strong> 
+                    <span class="badge bg-{% if prestacion.estado == 'borrador' %}warning{% elif prestacion.estado == 'autorizada' %}info{% elif prestacion.estado == 'realizada' %}success{% elif prestacion.estado == 'liquidada' %}dark{% endif %}">
+                        {{ prestacion.estado.upper() }}
+                    </span>
+                </p>
+                {% if prestacion.observaciones %}
+                <p><strong>Observaciones:</strong> {{ prestacion.observaciones }}</p>
+                {% endif %}
+                <p><strong>Códigos:</strong> {{ prestacion.get_codigo() or '-' }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Prácticas -->
+<div class="card mb-3">
+    <div class="card-header">
+        <h6 class="mb-0"><i class="bi bi-list-check"></i> Prácticas</h6>
+    </div>
+    <div class="card-body">
+        {% if prestacion.practicas_assoc %}
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>Código</th>
+                        <th>Descripción</th>
+                        <th>Cantidad</th>
+                        <th>Monto Unitario</th>
+                        <th>Estado Item</th>
+                        <th class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pp in prestacion.practicas_assoc %}
+                    {% if pp.practica and (pp.fecha_anulacion is none) %}
+                    <tr>
+                        <td>{{ pp.practica.codigo }}</td>
+                        <td>{{ pp.practica.descripcion }}</td>
+                        <td>{{ pp.cantidad }}</td>
+                        <td>{{ pp.monto_unitario or 0|format_currency }}</td>
+                        <td>
+                            <span class="badge bg-{% if pp.estado_item == 'pendiente' %}warning{% elif pp.estado_item == 'autorizado' %}info{% elif pp.estado_item == 'realizado' %}success{% endif %}">
+                                {{ pp.estado_item }}
+                            </span>
+                            {% if pp.fecha_realizacion_item %}
+                            <br><small class="text-muted">{{ pp.fecha_realizacion_item.strftime('%d/%m/%Y') }}</small>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if pp.estado_item == 'pendiente' and prestacion.estado in ['borrador', 'autorizada'] %}
+                            <form method="post" action="{{ url_for('main.marcar_item_realizado', prestacion_id=prestacion.id, item_id=pp.id) }}" style="display:inline;">
+                                <input type="hidden" name="fecha_realizacion_item" value="{{ prestacion.fecha_solicitud.strftime('%Y-%m-%d') }}">
+                                <button type="submit" class="btn btn-sm btn-success" title="Marcar como realizada">
+                                    <i class="bi bi-check-circle"></i>
+                                </button>
+                            </form>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">Sin prácticas registradas</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Autorización -->
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-check-circle"></i> Autorización</h6>
+        {% if prestacion.estado == 'borrador' %}
+        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalAutorizar">
+            <i class="bi bi-pencil"></i> Registrar Autorización
+        </button>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        {% if prestacion.fecha_autorizacion %}
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>Fecha de Autorización:</strong> {{ prestacion.fecha_autorizacion.strftime('%d/%m/%Y') }}</p>
+                {% if prestacion.autorizacion_adjunta_path %}
+                <p><strong>Adjunto:</strong> <a href="{{ prestacion.autorizacion_adjunta_path }}" target="_blank">Ver documento</a></p>
+                {% endif %}
+            </div>
+            <div class="col-md-6">
+                <p><strong>Importe Profesional:</strong> {{ prestacion.importe_profesional_autorizado or 0|format_currency }}</p>
+                <p><strong>Importe Afiliado:</strong> {{ prestacion.importe_afiliado_autorizado or 0|format_currency }}</p>
+                {% if prestacion.importe_coseguro_autorizado %}
+                <p><strong>Importe Coseguro:</strong> {{ prestacion.importe_coseguro_autorizado|format_currency }}</p>
+                {% endif %}
+            </div>
+        </div>
+        {% if prestacion.observaciones_autorizacion %}
+        <p><strong>Observaciones:</strong> {{ prestacion.observaciones_autorizacion }}</p>
+        {% endif %}
+        {% else %}
+        <p class="text-muted"><i class="bi bi-info-circle"></i> Aún no registrada</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Cobros -->
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-cash-coin"></i> Cobros</h6>
+        {% if prestacion.estado in ['autorizada', 'realizada'] %}
+        <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#modalCobro">
+            <i class="bi bi-plus-circle"></i> Registrar Cobro
+        </button>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <!-- Resumen de montos a cobrar -->
+        <div class="alert alert-info">
+            <h6 class="alert-heading"><i class="bi bi-info-circle"></i> Montos a Cobrar al Paciente</h6>
+            {% if prestacion.fecha_autorizacion %}
+            <div class="row">
+                <div class="col-md-6">
+                    <strong>Importe Afiliado (Paciente):</strong>
+                    <p class="mb-0">{{ prestacion.importe_afiliado_autorizado or 0|format_currency }}</p>
+                </div>
+                {% if prestacion.importe_coseguro_autorizado %}
+                <div class="col-md-6">
+                    <strong>Coseguro:</strong>
+                    <p class="mb-0">{{ prestacion.importe_coseguro_autorizado|format_currency }}</p>
+                </div>
+                {% endif %}
+            </div>
+            <div class="row mt-2">
+                <div class="col-md-12">
+                    <small class="text-muted"><i class="bi bi-info-circle"></i> <strong>Importe Profesional (OS):</strong> {{ prestacion.importe_profesional_autorizado or 0|format_currency }}</small>
+                    <p class="mb-0"><small class="text-muted">Se cobrará directamente de la obra social en otra fecha</small></p>
+                </div>
+            </div>
+            <hr>
+            {% endif %}
+            {% set total_plus = namespace(value=0) %}
+            {% for pp in prestacion.practicas_assoc %}
+                {% if pp.practica and pp.practica.es_plus and (pp.fecha_anulacion is none) %}
+                    {% set total_plus.value = total_plus.value + ((pp.monto_unitario or 0) * pp.cantidad) %}
+                {% endif %}
+            {% endfor %}
+            {% set total_a_cobrar = (prestacion.importe_afiliado_autorizado or 0) + (prestacion.importe_coseguro_autorizado or 0) + total_plus.value %}
+            {% set total_cobrado = prestacion.cobros|sum(attribute='monto') %}
+            {% set pendiente_cobrar = total_a_cobrar - total_cobrado %}
+            <div class="row mt-2">
+                <div class="col-md-4">
+                    <strong>Total a Cobrar:</strong>
+                    <p class="h5 text-primary mb-0">{{ total_a_cobrar|format_currency }}</p>
+                    <small class="text-muted">Afiliado: {{ prestacion.importe_afiliado_autorizado or 0|format_currency }}</small><br>
+                    {% if prestacion.importe_coseguro_autorizado %}
+                    <small class="text-muted">Coseguro: {{ prestacion.importe_coseguro_autorizado|format_currency }}</small><br>
+                    {% endif %}
+                    <small class="text-muted">Plus: {{ total_plus.value|format_currency }}</small>
+                </div>
+                <div class="col-md-4">
+                    <strong>Total Cobrado:</strong>
+                    <p class="h5 text-success mb-0">{{ total_cobrado|format_currency }}</p>
+                </div>
+                <div class="col-md-4">
+                    <strong>Pendiente de Cobro:</strong>
+                    <p class="h5 mb-0 {% if pendiente_cobrar > 0 %}text-danger{% else %}text-success{% endif %}">
+                        {{ pendiente_cobrar|format_currency }}
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tabla de cobros registrados -->
+        {% if prestacion.cobros %}
+        <h6 class="mt-3"><i class="bi bi-list"></i> Cobros Registrados</h6>
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Tipo de Cobro</th>
+                        <th>Monto</th>
+                        <th>Razón</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cobro in prestacion.cobros %}
+                    <tr>
+                        <td>{{ cobro.fecha_cobro.strftime('%d/%m/%Y') }}</td>
+                        <td>{{ cobro.tipo_cobro.capitalize() }}</td>
+                        <td>{{ cobro.monto|format_currency }}</td>
+                        <td>{{ cobro.razon or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <hr>
+        <div class="row">
+            <div class="col-md-12">
+                <h6>Totales por Método de Pago:</h6>
+                {% set cobros_por_tipo = {} %}
+                {% for cobro in prestacion.cobros %}
+                    {% set _ = cobros_por_tipo.update({cobro.tipo_cobro: cobros_por_tipo.get(cobro.tipo_cobro, 0) + cobro.monto}) %}
+                {% endfor %}
+                <ul class="list-unstyled">
+                    {% for tipo, total in cobros_por_tipo.items() %}
+                        <li><strong>{{ tipo.capitalize() }}:</strong> {{ total|format_currency }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% else %}
+        <p class="text-muted"><i class="bi bi-info-circle"></i> Sin cobros registrados</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Realización -->
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-calendar-check"></i> Realización</h6>
+        {% if prestacion.estado == 'autorizada' %}
+        <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#modalRealizar">
+            <i class="bi bi-check"></i> Marcar Realizada
+        </button>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        {% if prestacion.fecha_realizacion %}
+        <p><strong>Fecha de Realización:</strong> {{ prestacion.fecha_realizacion.strftime('%d/%m/%Y') }}</p>
+        {% else %}
+        <p class="text-muted"><i class="bi bi-info-circle"></i> Aún no realizada</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal Autorizar -->
+<div class="modal fade" id="modalAutorizar" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-check-circle"></i> Registrar Autorización</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('main.autorizar_prestacion', prestacion_id=prestacion.id) }}" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Fecha de Autorización</label>
+                        <input type="date" class="form-control" name="fecha_autorizacion" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Importe Profesional (Honorarios OS)</label>
+                                <input type="number" class="form-control" name="importe_profesional_autorizado" step="0.01" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Importe Afiliado (Paciente)</label>
+                                <input type="number" class="form-control" name="importe_afiliado_autorizado" step="0.01" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Importe Coseguro (Opcional)</label>
+                        <input type="number" class="form-control" name="importe_coseguro_autorizado" step="0.01">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Adjunto (Foto/PDF de ficha autorizada)</label>
+                        <input type="file" class="form-control" name="autorizacion_adjunta" accept=".pdf,.jpg,.jpeg,.png">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Observaciones</label>
+                        <textarea class="form-control" name="observaciones_autorizacion" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar Autorización</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Cobro -->
+<div class="modal fade" id="modalCobro" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-cash-coin"></i> Registrar Cobro</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('main.registrar_cobro_prestacion', prestacion_id=prestacion.id) }}" id="formCobro">
+                <div class="modal-body">
+                    <!-- Información de montos -->
+                    {% set total_plus = namespace(value=0) %}
+                    {% for pp in prestacion.practicas_assoc %}
+                        {% if pp.practica and pp.practica.es_plus and (pp.fecha_anulacion is none) %}
+                            {% set total_plus.value = total_plus.value + ((pp.monto_unitario or 0) * pp.cantidad) %}
+                        {% endif %}
+                    {% endfor %}
+                    {% set total_a_cobrar = (prestacion.importe_afiliado_autorizado or 0) + (prestacion.importe_coseguro_autorizado or 0) + total_plus.value %}
+                    {% set total_cobrado = prestacion.cobros|sum(attribute='monto') %}
+                    {% set pendiente_cobrar = total_a_cobrar - total_cobrado %}
+                    <div class="alert alert-warning">
+                        <h6><i class="bi bi-exclamation-triangle"></i> Información de Cobro</h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <strong>Total a Cobrar:</strong>
+                                <p class="mb-0">{{ total_a_cobrar|format_currency }}</p>
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Ya Cobrado:</strong>
+                                <p class="mb-0">{{ total_cobrado|format_currency }}</p>
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Pendiente:</strong>
+                                <p class="mb-0 text-danger h5">{{ pendiente_cobrar|format_currency }}</p>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Importe Afiliado:</strong> {{ prestacion.importe_afiliado_autorizado or 0|format_currency }}
+                            </div>
+                            {% if prestacion.importe_coseguro_autorizado %}
+                            <div class="col-md-6">
+                                <strong>Coseguro:</strong> {{ prestacion.importe_coseguro_autorizado|format_currency }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        <hr>
+                        <strong>Prácticas Plus a cobrar:</strong>
+                        <ul class="mb-0">
+                            {% set tiene_plus = namespace(value=false) %}
+                            {% for pp in prestacion.practicas_assoc %}
+                            {% if pp.practica and pp.practica.es_plus and (pp.fecha_anulacion is none) %}
+                                {% set tiene_plus.value = true %}
+                                <li><span class="badge bg-warning text-dark">PLUS</span> {{ pp.practica.codigo }} - {{ pp.practica.descripcion }} (x{{ pp.cantidad }}) - {{ ((pp.monto_unitario or 0) * pp.cantidad)|format_currency }}</li>
+                            {% endif %}
+                            {% endfor %}
+                            {% if not tiene_plus.value %}
+                            <li class="text-muted">Sin prácticas plus</li>
+                            {% endif %}
+                        </ul>
+                        <hr>
+                        <small class="text-muted"><strong>Prácticas cubiertas por obra social:</strong></small>
+                        <ul class="mb-0 small">
+                            {% for pp in prestacion.practicas_assoc %}
+                            {% if pp.practica and not pp.practica.es_plus and (pp.fecha_anulacion is none) %}
+                            <li class="text-muted">{{ pp.practica.codigo }} - {{ pp.practica.descripcion }} (x{{ pp.cantidad }})</li>
+                            {% endif %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Fecha de Cobro</label>
+                        <input type="date" class="form-control" name="fecha_cobro" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Cobro (Método de Pago)</label>
+                        <select class="form-select" name="tipo_cobro" required>
+                            <option value="">-- Seleccionar --</option>
+                            <option value="transferencia">Transferencia</option>
+                            <option value="efectivo">Efectivo</option>
+                            <option value="debito">Débito</option>
+                            <option value="credito">Crédito</option>
+                            <option value="otros">Otros</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Monto</label>
+                        <input type="number" class="form-control" name="monto" id="montoCobro" step="0.01" required max="{{ pendiente_cobrar }}">
+                        {% if pendiente_cobrar > 0 %}
+                        <small class="text-muted">Máximo pendiente: {{ pendiente_cobrar|format_currency }}</small>
+                        {% endif %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Razón/Descripción</label>
+                        <input type="text" class="form-control" name="razon" placeholder="Ej: Pago parcial prestación">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Registrar Cobro</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Validar que el monto no exceda el pendiente
+document.addEventListener('DOMContentLoaded', function() {
+    const formCobro = document.getElementById('formCobro');
+    if (formCobro) {
+        formCobro.addEventListener('submit', function(e) {
+            const montoInput = document.getElementById('montoCobro');
+            const maxPendiente = parseFloat(montoInput.getAttribute('max'));
+            const montoIngresado = parseFloat(montoInput.value);
+            
+            if (maxPendiente && montoIngresado > maxPendiente) {
+                e.preventDefault();
+                alert('El monto ingresado (' + formatCurrencyAR(montoIngresado) + ') excede el pendiente de cobro (' + formatCurrencyAR(maxPendiente) + ')');
+                return false;
+            }
+            
+            if (montoIngresado <= 0) {
+                e.preventDefault();
+                alert('El monto debe ser mayor a 0,00');
+                return false;
+            }
+        });
+    }
+});
+</script>
+
+<!-- Modal Realizar -->
+<div class="modal fade" id="modalRealizar" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-calendar-check"></i> Marcar Realizada</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('main.realizar_prestacion', prestacion_id=prestacion.id) }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Fecha de Realización</label>
+                        <input type="date" class="form-control" name="fecha_realizacion" required>
+                    </div>
+                    <p class="text-muted"><i class="bi bi-info-circle"></i> Una vez marcada como realizada, la prestación no podrá editarse.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-warning">Marcar Realizada</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal confirmar eliminar prestación -->
+{% if prestacion.estado == 'borrador' %}
+<div class="modal fade" id="modalEliminarPrestacion" tabindex="-1" aria-labelledby="modalEliminarPrestacionLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalEliminarPrestacionLabel">
+                    <i class="bi bi-exclamation-triangle text-danger"></i> Confirmar eliminación
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que querés eliminar la prestación <strong>{{ prestacion.descripcion }}</strong>?</p>
+                <p class="text-danger mb-0"><small><i class="bi bi-info-circle"></i> Esta acción es irreversible. Se eliminarán también todas las prácticas asociadas.</small></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form method="POST" action="{{ url_for('main.eliminar_prestacion', prestacion_id=prestacion.id) }}" class="d-inline">
+                    {{ form.hidden_tag() if form else '' }}
+                    {% if csrf_token is defined %}
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    {% endif %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash"></i> Eliminar definitivamente
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

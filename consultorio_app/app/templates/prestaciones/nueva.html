@@ -1,14 +1,15 @@
 {% extends "base.html" %}
 
-{% block title %}Nueva Prestación{% endblock %}
+{% block title %}{{ 'Editar Prestación' if modo_edicion else 'Nueva Prestación' }}{% endblock %}
 
 {% block content %}
-<h3 class="mb-3">Nueva Prestación</h3>
+<h3 class="mb-3">{{ 'Editar Prestación' if modo_edicion else 'Nueva Prestación' }}</h3>
 <div class="card">
     <div class="card-body">
         <form method="post" id="prestacionForm" novalidate>
             {{ form.hidden_tag() }}
             {{ form.monto() }}
+            {{ form.prestacion_id(value=prestacion_edit_id) }}
             
             <!-- Selección de paciente y descripción -->
             <div class="row g-3 mb-3">
@@ -63,35 +64,36 @@
                             <thead class="table-light">
                                 <tr>
                                     <th width="15%">Código</th>
-                                    <th width="50%">Descripción</th>
-                                    <th width="20%" class="text-end">Monto</th>
+                                    <th width="45%">Descripción</th>
+                                    <th width="10%" class="text-center">Cantidad</th>
+                                    <th width="15%" class="text-end">Monto unit.</th>
                                     <th width="15%" class="text-center">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody id="practicas_seleccionadas">
                                 <tr id="empty_row">
-                                    <td colspan="4" class="text-center text-muted py-4">No hay prácticas seleccionadas</td>
+                                    <td colspan="5" class="text-center text-muted py-4">No hay prácticas seleccionadas</td>
                                 </tr>
                             </tbody>
                             <tfoot class="table-light border-top">
                                 <tr>
-                                    <td colspan="2" class="text-end"><strong>Subtotal:</strong></td>
-                                    <td class="text-end"><strong><span id="subtotal">$0.00</span></strong></td>
+                                    <td colspan="3" class="text-end"><strong>Subtotal:</strong></td>
+                                    <td class="text-end"><strong><span id="subtotal">0,00</span></strong></td>
                                     <td></td>
                                 </tr>
                                 <tr>
-                                    <td colspan="2" class="text-end">Descuento %:</td>
-                                    <td class="text-end"><span id="descuento_porcentaje_monto">$0.00</span></td>
+                                    <td colspan="3" class="text-end">Descuento %:</td>
+                                    <td class="text-end"><span id="descuento_porcentaje_monto">0,00</span></td>
                                     <td></td>
                                 </tr>
                                 <tr>
-                                    <td colspan="2" class="text-end">Descuento fijo:</td>
-                                    <td class="text-end"><span id="descuento_fijo_monto">$0.00</span></td>
+                                    <td colspan="3" class="text-end">Descuento fijo:</td>
+                                    <td class="text-end"><span id="descuento_fijo_monto">0,00</span></td>
                                     <td></td>
                                 </tr>
                                 <tr class="table-active">
-                                    <td colspan="2" class="text-end"><strong>Total:</strong></td>
-                                    <td class="text-end"><strong class="text-primary fs-5"><span id="monto_total">$0.00</span></strong></td>
+                                    <td colspan="3" class="text-end"><strong>Total:</strong></td>
+                                    <td class="text-end"><strong class="text-primary fs-5"><span id="monto_total">0,00</span></strong></td>
                                     <td></td>
                                 </tr>
                             </tfoot>
@@ -311,7 +313,7 @@ function actualizarSelectPracticas() {
             option.dataset.codigo = p.codigo;
             option.dataset.descripcion = p.descripcion;
             option.dataset.monto = p.monto_unitario;
-            option.textContent = `${p.codigo} - ${p.descripcion} ($${p.monto_unitario.toFixed(2)})`;
+            option.textContent = `${p.codigo} - ${p.descripcion} (${formatCurrencyAR(p.monto_unitario)})`;
             select.appendChild(option);
         }
     });
@@ -330,13 +332,27 @@ function agregarPractica() {
         id: parseInt(option.value),
         codigo: option.dataset.codigo,
         descripcion: option.dataset.descripcion,
-        monto_unitario: parseFloat(option.dataset.monto)
+           monto_unitario: parseFloat(option.dataset.monto),
+           cantidad: 1,
     };
     
     practicasSeleccionadas.push(practica);
     actualizarTablaPracticas();
     actualizarSelectPracticas();
     select.value = '';
+}
+
+function cambiarCantidad(practicaId, nuevaCantidad) {
+    const cantidadNum = Math.max(1, parseInt(nuevaCantidad) || 1);
+    practicasSeleccionadas = practicasSeleccionadas.map(p => {
+        if (p.id === practicaId) {
+            p.cantidad = cantidadNum;
+            const hidden = document.getElementById(`cantidad_hidden_${p.id}`);
+            if (hidden) hidden.value = cantidadNum;
+        }
+        return p;
+    });
+    actualizarMontos();
 }
 
 function eliminarPractica(practicaId) {
@@ -350,34 +366,42 @@ function actualizarTablaPracticas() {
     tbody.innerHTML = '';
     
     if (practicasSeleccionadas.length === 0) {
-        tbody.innerHTML = '<tr id="empty_row"><td colspan="4" class="text-center text-muted py-4">No hay prácticas seleccionadas</td></tr>';
+        tbody.innerHTML = '<tr id="empty_row"><td colspan="5" class="text-center text-muted py-4">No hay prácticas seleccionadas</td></tr>';
         actualizarMontos(0);
         return;
     }
     
     let subtotal = 0;
     practicasSeleccionadas.forEach(p => {
+        const cantidad = Math.max(1, parseInt(p.cantidad) || 1);
+        p.cantidad = cantidad;
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td><code>${p.codigo}</code></td>
             <td>${p.descripcion}</td>
-            <td class="text-end">$${p.monto_unitario.toFixed(2)}</td>
+            <td class="text-center" style="width:110px;">
+                <input type="number" min="1" step="1" value="${cantidad}" class="form-control form-control-sm text-center" onchange="cambiarCantidad(${p.id}, this.value)">
+            </td>
+            <td class="text-end">${formatCurrencyAR(p.monto_unitario)}</td>
             <td class="text-center">
                 <button type="button" class="btn btn-sm btn-danger" onclick="eliminarPractica(${p.id})">
                     <i class="bi bi-trash"></i>
                 </button>
                 <input type="hidden" name="practica_ids[]" value="${p.id}">
+                <input type="hidden" name="practica_cantidades[]" value="${cantidad}" id="cantidad_hidden_${p.id}">
             </td>
         `;
         tbody.appendChild(tr);
-        subtotal += p.monto_unitario;
+        subtotal += p.monto_unitario * cantidad;
     });
     
     actualizarMontos(subtotal);
 }
 
 function actualizarMontos(subtotalOverride = null) {
-    const subtotal = subtotalOverride !== null ? subtotalOverride : practicasSeleccionadas.reduce((acc, p) => acc + p.monto_unitario, 0);
+    const subtotal = subtotalOverride !== null
+        ? subtotalOverride
+        : practicasSeleccionadas.reduce((acc, p) => acc + (p.monto_unitario * (p.cantidad || 1)), 0);
     const descuentoPorcentaje = Math.max(0, parseFloat(document.getElementById('descuento_porcentaje').value) || 0);
     const descuentoFijo = Math.max(0, parseFloat(document.getElementById('descuento_fijo').value) || 0);
     
@@ -386,10 +410,10 @@ function actualizarMontos(subtotalOverride = null) {
     let total = subtotal - descuentoMontoPorcentaje - descuentoMontoFijo;
     if (total < 0) total = 0;
 
-    document.getElementById('subtotal').textContent = `$${subtotal.toFixed(2)}`;
-    document.getElementById('descuento_porcentaje_monto').textContent = `$${descuentoMontoPorcentaje.toFixed(2)}`;
-    document.getElementById('descuento_fijo_monto').textContent = `$${descuentoMontoFijo.toFixed(2)}`;
-    document.getElementById('monto_total').textContent = `$${total.toFixed(2)}`;
+    document.getElementById('subtotal').textContent = formatCurrencyAR(subtotal);
+    document.getElementById('descuento_porcentaje_monto').textContent = formatCurrencyAR(descuentoMontoPorcentaje);
+    document.getElementById('descuento_fijo_monto').textContent = formatCurrencyAR(descuentoMontoFijo);
+    document.getElementById('monto_total').textContent = formatCurrencyAR(total);
     
     // Actualizar el campo monto del form (HiddenField)
     document.getElementById('monto').value = total.toFixed(2);
@@ -451,8 +475,12 @@ window.addEventListener('DOMContentLoaded', () => {
     
     // Restaurar prácticas si hay un error de validación
     const practicaIdsStr = '{{ practica_ids_str or "" }}';
+    const practicaCantidadesStr = '{{ practica_cantidades_str or "" }}';
     if (practicaIdsStr) {
         const practicaIds = practicaIdsStr.split(',').map(id => parseInt(id)).filter(id => !isNaN(id));
+        const practicaCantidades = practicaCantidadesStr
+            ? practicaCantidadesStr.split(',').map(c => parseInt(c)).filter(c => !isNaN(c))
+            : [];
         if (practicaIds.length > 0) {
             const pacienteId = {{ form.paciente_id.data or 0 }};
             if (pacienteId > 0) {
@@ -462,7 +490,13 @@ window.addEventListener('DOMContentLoaded', () => {
                     .then(data => {
                         practicasDisponibles = data.practicas || [];
                         // Restaurar prácticas seleccionadas
-                        practicasSeleccionadas = practicasDisponibles.filter(p => practicaIds.includes(p.id));
+                        practicasSeleccionadas = practicasDisponibles
+                            .filter(p => practicaIds.includes(p.id))
+                            .map(p => {
+                                const idx = practicaIds.indexOf(p.id);
+                                const cantidad = practicaCantidades[idx] || 1;
+                                return { ...p, cantidad: Math.max(1, cantidad) };
+                            });
                         actualizarTablaPracticas();
                         actualizarSelectPracticas();
                         

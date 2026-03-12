@@ -23,6 +23,7 @@
                         <th>Monto</th>
                         <th>Código</th>
                         <th>Observaciones</th>
+                        <th>Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -32,9 +33,29 @@
                         <td>{{ prestacion.fecha.strftime('%d/%m/%Y %H:%M') if prestacion.fecha else '-' }}</td>
                         <td>{{ prestacion.paciente.apellido }}, {{ prestacion.paciente.nombre }}</td>
                         <td>{{ prestacion.descripcion }}</td>
-                        <td>${{ '%.2f'|format(prestacion.monto) }}</td>
+                        <td>{{ prestacion.monto|format_currency }}</td>
                         <td>{{ prestacion.get_codigo() or '-' }}</td>
                         <td>{{ prestacion.observaciones or '-' }}</td>
+                        <td>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="{{ url_for('main.ver_prestacion', prestacion_id=prestacion.id) }}" class="btn btn-outline-primary" title="Ver detalles">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                {% if prestacion.estado == 'borrador' %}
+                                <a href="{{ url_for('main.editar_prestacion', prestacion_id=prestacion.id) }}" class="btn btn-outline-warning" title="Editar">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form method="POST" action="{{ url_for('main.eliminar_prestacion', prestacion_id=prestacion.id) }}" class="d-inline" onsubmit="return confirm('¿Eliminar la prestación {{ prestacion.descripcion|replace("'", "\'")|truncate(40, true, '...') }}?')">
+                                    {% if csrf_token is defined %}
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    {% endif %}
+                                    <button type="submit" class="btn btn-outline-danger" title="Eliminar">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
                     </tr>
                     {% endif %}
                     {% endfor %}

@@ -26,7 +26,7 @@
     <div class="card-body">
         <form method="get" class="row g-2">
             <div class="col-md-4">
-                <input type="text" name="descripcion" class="form-control" placeholder="Descripción" value="{{ filtros.get('descripcion', '') }}">
+                <input type="text" name="descripcion" class="form-control" placeholder="Descripción" value="{{ filtros.get('descripcion') or '' }}">
             </div>
             <div class="col-md-3">
                 <input type="number" name="monto_min" class="form-control" placeholder="Monto mínimo" step="0.01" value="{{ filtros.get('monto_min', '') }}">
@@ -52,7 +52,9 @@
                         <th>Código</th>
                         <th>Descripción</th>
                         <th>Monto</th>
+                        <th>Estado</th>
                         <th>Observaciones</th>
+                        <th>Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -62,8 +64,49 @@
                         <td>{{ prestacion.fecha.strftime('%d/%m/%Y %H:%M') if prestacion.fecha else '-' }}</td>
                         <td>{{ prestacion.get_codigo() or '-' }}</td>
                         <td>{{ prestacion.descripcion }}</td>
-                        <td>${{ '%.2f'|format(prestacion.monto) }}</td>
+                        <td>{{ prestacion.monto|format_currency }}</td>
+                        <td>
+                            {% if prestacion.estado == 'borrador' %}
+                                <span class="badge bg-secondary text-uppercase">Borrador</span>
+                            {% elif prestacion.estado == 'en_proceso' %}
+                                <span class="badge bg-info text-uppercase">En proceso</span>
+                            {% elif prestacion.estado == 'autorizado' or prestacion.estado == 'autorizada' %}
+                                <span class="badge bg-info text-uppercase">{{ prestacion.estado.replace('_', ' ') }}</span>
+                            {% elif prestacion.estado == 'realizado' or prestacion.estado == 'realizada' %}
+                                <span class="badge bg-success text-uppercase">{{ prestacion.estado.replace('_', ' ') }}</span>
+                            {% elif prestacion.estado == 'facturado' %}
+                                <span class="badge bg-warning text-dark text-uppercase">Facturado</span>
+                            {% elif prestacion.estado == 'pagado' %}
+                                <span class="badge bg-success text-uppercase">Pagado</span>
+                            {% elif prestacion.estado == 'anulado' or prestacion.estado == 'anulada' %}
+                                <span class="badge bg-dark text-uppercase">{{ prestacion.estado.replace('_', ' ') }}</span>
+                            {% elif prestacion.estado == 'pendiente_cobro' %}
+                                <span class="badge bg-warning text-dark text-uppercase">{{ prestacion.estado.replace('_', ' ') }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary text-uppercase">{{ prestacion.estado.replace('_', ' ') if prestacion.estado else 'desconocido' }}</span>
+                            {% endif %}
+                        </td>
                         <td>{{ prestacion.observaciones or '-' }}</td>
+                        <td>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="{{ url_for('main.ver_prestacion', prestacion_id=prestacion.id) }}" class="btn btn-outline-primary" title="Ver detalles">
+                                    <i class="bi bi-eye"></i> Gestionar
+                                </a>
+                                {% if prestacion.estado == 'borrador' %}
+                                <a href="{{ url_for('main.editar_prestacion', prestacion_id=prestacion.id) }}" class="btn btn-outline-warning" title="Editar">
+                                    <i class="bi bi-pencil"></i> Editar
+                                </a>
+                                <form method="POST" action="{{ url_for('main.eliminar_prestacion', prestacion_id=prestacion.id) }}" class="d-inline" onsubmit="return confirm('¿Eliminar la prestación {{ prestacion.descripcion|replace("'", "\'")|truncate(40, true, '...') }}?')">
+                                    {% if csrf_token is defined %}
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    {% endif %}
+                                    <button type="submit" class="btn btn-outline-danger" title="Eliminar">
+                                        <i class="bi bi-trash"></i> Eliminar
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
                     </tr>
                     {% endif %}
                     {% endfor %}

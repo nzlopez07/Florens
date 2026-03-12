@@ -12,25 +12,41 @@ from typing import List, Optional
 from sqlalchemy import or_, and_
 from app.database.session import DatabaseSession
 from app.models import Practica
+from app.models import ObraSocial
 
 
 class ListarPracticasService:
     """Caso de uso: listar y consultar prácticas."""
     
     @staticmethod
-    def listar_todas() -> List[Practica]:
-        """Lista todas las prácticas ordenadas por descripcion."""
-        return Practica.query.order_by(Practica.descripcion).all()
+    def listar_todas(incluir_bajas: bool = False) -> List[Practica]:
+        """Lista todas las prácticas ordenadas por descripcion.
+        
+        Args:
+            incluir_bajas: Si True, incluye prácticas dadas de baja. Default False.
+        """
+        query = Practica.query
+        if not incluir_bajas:
+            query = query.filter(Practica.fecha_baja.is_(None))
+        return query.order_by(Practica.descripcion).all()
     
     @staticmethod
-    def listar_por_proveedor(obra_social_id: Optional[int] = None) -> List[Practica]:
+    def listar_por_proveedor(obra_social_id: Optional[int] = None, incluir_bajas: bool = False) -> List[Practica]:
         """
         Lista prácticas filtradas por proveedor.
         
         - Si obra_social_id está presente: solo prácticas de esa obra social (proveedor_tipo='OBRA_SOCIAL').
         - Si obra_social_id es None: solo prácticas particulares (proveedor_tipo='PARTICULAR').
+        
+        Args:
+            obra_social_id: ID de obra social o None para particulares
+            incluir_bajas: Si True, incluye prácticas dadas de baja. Default False.
         """
         query = Practica.query
+        
+        # Filtrar bajas lógicas
+        if not incluir_bajas:
+            query = query.filter(Practica.fecha_baja.is_(None))
 
         if obra_social_id is not None:
             query = query.filter(
@@ -40,7 +56,20 @@ class ListarPracticasService:
                 )
             )
         else:
-            query = query.filter(Practica.proveedor_tipo == 'PARTICULAR')
+            # Compatibilidad legacy: algunas prácticas "particulares" quedaron
+            # guardadas como OBRA_SOCIAL apuntando a la obra social PARTICULAR.
+            particular_os_ids = [
+                os.id for os in ObraSocial.query.filter(ObraSocial.nombre.ilike('%PARTICULAR%')).all()
+            ]
+            query = query.filter(
+                or_(
+                    Practica.proveedor_tipo == 'PARTICULAR',
+                    and_(
+                        Practica.proveedor_tipo == 'OBRA_SOCIAL',
+                        Practica.obra_social_id.in_(particular_os_ids) if particular_os_ids else False,
+                    ),
+                )
+            )
 
         return query.order_by(Practica.descripcion).all()
     
@@ -79,7 +108,18 @@ class ListarPracticasService:
                 )
             )
         else:
-            query = query.filter(Practica.proveedor_tipo == 'PARTICULAR')
+            particular_os_ids = [
+                os.id for os in ObraSocial.query.filter(ObraSocial.nombre.ilike('%PARTICULAR%')).all()
+            ]
+            query = query.filter(
+                or_(
+                    Practica.proveedor_tipo == 'PARTICULAR',
+                    and_(
+                        Practica.proveedor_tipo == 'OBRA_SOCIAL',
+                        Practica.obra_social_id.in_(particular_os_ids) if particular_os_ids else False,
+                    ),
+                )
+            )
         
         return query.order_by(Practica.descripcion).all()
     

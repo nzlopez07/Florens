@@ -44,9 +44,14 @@ class CrearPracticaService:
         session = DatabaseSession.get_instance().session
         
         # 1. Validar y extraer datos requeridos
-        codigo = data.get('codigo', '').strip().upper()
-        if not codigo:
+        codigo_original = data.get('codigo', '').strip().upper()
+        if not codigo_original:
             raise DatosInvalidosError('codigo es requerido')
+        
+        es_plus = data.get('es_plus', False)
+        
+        # Si es plus, prefijar con 'plus_'
+        codigo = f'plus_{codigo_original}' if es_plus else codigo_original
         
         descripcion = data.get('descripcion', '').strip()
         if not descripcion:
@@ -67,13 +72,22 @@ class CrearPracticaService:
             )
         
         obra_social_id = data.get('obra_social_id')
+        if not obra_social_id:
+            obra_social_id = None
+
+        # PARTICULAR siempre se guarda con obra_social_id NULL
+        if proveedor_tipo == 'PARTICULAR':
+            obra_social_id = None
         
-        # 2. Validar que código no exista
+        # 2. Validar que código no exista para el mismo proveedor/obra_social
+        # (mismo código puede existir en distintas obras sociales)
         existente = session.query(Practica).filter(
-            Practica.codigo == codigo
+            Practica.codigo == codigo,
+            Practica.proveedor_tipo == proveedor_tipo,
+            Practica.obra_social_id == obra_social_id,
         ).first()
         if existente:
-            raise DatosInvalidosError(f'Ya existe una práctica con código {codigo}')
+            raise DatosInvalidosError(f'Ya existe una práctica con código {codigo} para este proveedor')
         
         # 3. Si es OBRA_SOCIAL, validar obra_social_id
         if proveedor_tipo == 'OBRA_SOCIAL':
@@ -96,6 +110,7 @@ class CrearPracticaService:
             monto_unitario=monto_unitario,
             proveedor_tipo=proveedor_tipo,
             obra_social_id=obra_social_id,
+            es_plus=es_plus,
         )
         session.add(practica)
         session.commit()

@@ -40,6 +40,14 @@
                     {{ render_field(form.descripcion) }}
                     {{ render_field(form.monto_unitario) }}
                     {{ render_field(form.obra_social_id, 'Obra Social') }}
+                    
+                    <div class="mb-3 form-check">
+                        {{ form.es_plus(class="form-check-input") }}
+                        <label class="form-check-label" for="{{ form.es_plus.id }}">
+                            {{ form.es_plus.label.text }}
+                            <small class="text-muted d-block">El código se guardará automáticamente como "plus_[código]"</small>
+                        </label>
+                    </div>
 
                     <div class="d-grid gap-2 d-sm-flex justify-content-sm-end">
                         <a href="{{ url_for('main.listar_practicas') }}" class="btn btn-secondary">Cancelar</a>

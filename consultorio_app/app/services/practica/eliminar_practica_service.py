@@ -1,30 +1,35 @@
 """
-Servicio para eliminar prácticas.
+Servicio para dar de baja prácticas (baja lógica).
 
-Replica la funcionalidad de eliminar_practica() del viejo practica_service.py.
+Replica la funcionalidad de eliminar_practica() del viejo practica_service.py,
+pero implementa baja lógica en lugar de eliminación física.
 """
 
 from typing import Dict, Any
+from datetime import date
 from app.database.session import DatabaseSession
 from app.models import Practica, PrestacionPractica
 from app.services.common import (
     PracticaNoEncontradaError,
     PracticaConDependenciasError,
+    DatosInvalidosError,
 )
 
 
 class EliminarPracticaService:
-    """Servicio para eliminar prácticas."""
+    """Servicio para dar de baja prácticas (baja lógica)."""
     
     @staticmethod
-    def execute(practica_id: int) -> Dict[str, Any]:
+    def execute(practica_id: int, razon: str = None) -> Dict[str, Any]:
         """
-        Elimina una práctica.
+        Da de baja una práctica (baja lógica).
         
-        Solo permite eliminar si la práctica no tiene prestaciones asociadas.
+        Marca la práctica con fecha_baja y razón, en lugar de eliminarla.
+        Esto permite mantener el historial incluso si tiene prestaciones asociadas.
         
         Args:
-            practica_id: ID de la práctica a eliminar
+            practica_id: ID de la práctica a dar de baja
+            razon: Razón de la baja (opcional)
             
         Returns:
             Dict con resultado:
@@ -35,7 +40,7 @@ class EliminarPracticaService:
             
         Raises:
             PracticaNoEncontradaError: Si práctica no existe
-            PracticaConDependenciasError: Si tiene prestaciones asociadas
+            DatosInvalidosError: Si la práctica ya está dada de baja
         """
         session = DatabaseSession.get_instance().session
         
@@ -46,22 +51,30 @@ class EliminarPracticaService:
         if not practica:
             raise PracticaNoEncontradaError(practica_id)
         
-        # 2. Verificar que no tenga prestaciones asociadas
-        prestaciones_asociadas = session.query(PrestacionPractica).filter(
-            PrestacionPractica.practica_id == practica_id
-        ).count()
-        
-        if prestaciones_asociadas > 0:
-            raise PracticaConDependenciasError(
-                f'No se puede eliminar la práctica "{practica.descripcion}" '
-                f'porque tiene {prestaciones_asociadas} prestación(es) asociada(s)'
+        # 2. Verificar que no esté ya dada de baja
+        if practica.fecha_baja:
+            raise DatosInvalidosError(
+                f'La práctica "{practica.descripcion}" ya fue dada de baja el {practica.fecha_baja}'
             )
         
-        # 3. Eliminar
-        session.delete(practica)
+        # 3. Dar de baja (baja lógica)
+        practica.fecha_baja = date.today()
+        practica.razon_baja = razon or 'Baja solicitada por usuario'
+        practica.activa = False
+        
         session.commit()
+        
+        # 4. Informar si tiene prestaciones asociadas
+        prestaciones_asociadas = session.query(PrestacionPractica).filter(
+            PrestacionPractica.practica_id == practica_id,
+            PrestacionPractica.fecha_anulacion.is_(None)
+        ).count()
+        
+        mensaje = f'Práctica "{practica.descripcion}" dada de baja correctamente'
+        if prestaciones_asociadas > 0:
+            mensaje += f' (mantiene {prestaciones_asociadas} prestación(es) asociada(s) en el historial)'
         
         return {
             'success': True,
-            'mensaje': f'Práctica "{practica.descripcion}" eliminada correctamente',
+            'mensaje': mensaje,
         }

@@ -7,7 +7,7 @@
     <div>
         <h2><i class="bi bi-card-checklist" style="color: #667eea; margin-right: 8px;"></i> Catálogo de Prácticas</h2>
         <nav class="nav nav-pills gap-2 mt-2">
-            <a href="{{ url_for('main.listar_practicas') }}" class="nav-link {% if not proveedor_filter %}active{% endif %}">
+            <a href="{{ url_for('main.listar_practicas', proveedor='Particular') }}" class="nav-link {% if proveedor_filter == 'Particular' or not proveedor_filter %}active{% endif %}">
                 <i class="bi bi-person"></i> Particular
             </a>
             <a href="{{ url_for('main.listar_practicas', proveedor='IPSS') }}" class="nav-link {% if proveedor_filter == 'IPSS' %}active{% endif %}">
@@ -41,9 +41,11 @@
                 <tr>
                     <td><code style="background: rgba(102, 126, 234, 0.1); color: #667eea; padding: 4px 8px; border-radius: 4px;">{{ practica.codigo }}</code></td>
                     <td>{{ practica.descripcion }}</td>
-                    <td><strong>${{ "%.2f"|format(practica.monto_unitario) }}</strong></td>
+                    <td><strong>{{ practica.monto_unitario|format_currency }}</strong></td>
                     <td>
-                        {% if practica.obra_social %}
+                        {% if practica.proveedor_tipo == 'PARTICULAR' or (practica.obra_social and 'PARTICULAR' in practica.obra_social.nombre|upper) %}
+                            <span class="badge" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">Particular</span>
+                        {% elif practica.obra_social %}
                             <span class="badge bg-info">{{ practica.obra_social.nombre }}</span>
                         {% else %}
                             <span class="badge" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">Particular</span>
@@ -54,11 +56,13 @@
                             <a href="{{ url_for('main.editar_practica', id=practica.id) }}" class="btn btn-outline-warning">
                                 <i class="bi bi-pencil"></i> Editar
                             </a>
-                            <form method="POST" action="{{ url_for('main.eliminar_practica', id=practica.id) }}" style="display: inline;" onsubmit="return confirm('¿Eliminar esta práctica?');">
-                                <button type="submit" class="btn btn-outline-danger btn-sm">
-                                    <i class="bi bi-trash"></i> Eliminar
-                                </button>
-                            </form>
+                            <button type="button" class="btn btn-outline-danger btn-sm" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#modalBajaPractica" 
+                                    data-practica-id="{{ practica.id }}" 
+                                    data-practica-nombre="{{ practica.descripcion }}">
+                                <i class="bi bi-trash"></i> Dar de Baja
+                            </button>
                         </div>
                     </td>
                 </tr>
@@ -76,4 +80,61 @@
     </a>
 </div>
 {% endif %}
+
+<!-- Modal para dar de baja práctica -->
+<div class="modal fade" id="modalBajaPractica" tabindex="-1" aria-labelledby="modalBajaPracticaLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalBajaPracticaLabel">
+                    <i class="bi bi-exclamation-triangle text-warning"></i> Dar de Baja Práctica
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" id="formBajaPractica">
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-info-circle"></i> Se dará de baja la práctica: <strong id="practicaNombre"></strong>
+                    </div>
+                    <p class="text-muted">Esta operación es una <strong>baja lógica</strong>. La práctica dejará de aparecer en los listados pero se mantendrá en el historial de prestaciones asociadas.</p>
+                    
+                    <div class="mb-3">
+                        <label for="razonBaja" class="form-label">Razón de la baja (opcional)</label>
+                        <textarea class="form-control" id="razonBaja" name="razon" rows="3" placeholder="Ej: Práctica discontinuada, Reemplazada por otra, etc."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash"></i> Dar de Baja
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Configurar modal de baja al hacer click en botón
+    document.addEventListener('DOMContentLoaded', function() {
+        const modalBaja = document.getElementById('modalBajaPractica');
+        const formBaja = document.getElementById('formBajaPractica');
+        const practicaNombre = document.getElementById('practicaNombre');
+        
+        modalBaja.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const practicaId = button.getAttribute('data-practica-id');
+            const nombre = button.getAttribute('data-practica-nombre');
+            
+            // Actualizar contenido del modal
+            practicaNombre.textContent = nombre;
+            formBaja.action = `/practicas/${practicaId}/eliminar`;
+        });
+        
+        // Limpiar textarea al cerrar modal
+        modalBaja.addEventListener('hidden.bs.modal', function() {
+            document.getElementById('razonBaja').value = '';
+        });
+    });
+</script>
 {% endblock %}
