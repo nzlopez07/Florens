@@ -1,0 +1,8 @@
+Botón de eliminar prestación con basurerito o cambiar
+Cambiar la PK de Práctica (Código) a una PK compuesta (código + obra_social_ID)
+El GET de prácticas particulares no hace get a la URL correcta (falta el ?=Particular)
+Poder asignar turnos a gente no registrada(¿cómo marcarlo?)
+Eliminar la notificación de prestaciones sin marcar en los odontogramas
+en gestion de gastos, quisiera una categoría técnico prótesis, dentro de éste que se pueda poner a qué paciente le corresponde ése gasto. Y en general de los gastos q se puedan modificar (no borrar) porque escribo rapido y me equivoco
+Cadetería y Sueldos de técnicos se pagan con cobranza al paciente.
+Códigos 40.algo se los marca como posibles candidatos a categoría de prótesis técnico.
